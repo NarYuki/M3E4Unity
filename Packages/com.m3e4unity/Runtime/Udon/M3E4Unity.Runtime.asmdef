@@ -1,0 +1,20 @@
+{
+    "name": "M3E4Unity.Runtime",
+    "rootNamespace": "M3E4Unity.Udon",
+    "references": [
+        "Unity.TextMeshPro",
+        "UdonSharp.Runtime",
+        "VRC.Udon",
+        "VRC.SDK3",
+        "VRC.SDKBase"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

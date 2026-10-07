@@ -1,0 +1,33 @@
+{
+  "name": "com.m3e4unity",
+  "displayName": "M3E4Unity - Material 3 Expressive for Unity",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "Material 3 Expressive for Unity uGUI: dynamic color (material-color-utilities port), the full Compose Material 3 token set, MaterialShapes and shape morphing, spring motion, and builders for every M3 Expressive component. Works in plain Unity and in VRChat worlds (UdonSharp).",
+  "keywords": [
+    "material",
+    "material3",
+    "material-you",
+    "m3",
+    "expressive",
+    "ugui",
+    "vrchat",
+    "udonsharp"
+  ],
+  "license": "Apache-2.0",
+  "author": {
+    "name": "M3E4Unity contributors"
+  },
+  "documentationUrl": "https://github.com/NarYuki/M3E4Unity#readme",
+  "changelogUrl": "https://github.com/NarYuki/M3E4Unity/blob/main/Packages/com.m3e4unity/CHANGELOG.md",
+  "licensesUrl": "https://github.com/NarYuki/M3E4Unity/blob/main/LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NarYuki/M3E4Unity.git"
+  },
+  "dependencies": {
+    "com.unity.ugui": "1.0.0",
+    "com.unity.textmeshpro": "3.0.6"
+  },
+  "vpmDependencies": {}
+}

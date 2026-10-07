@@ -1,0 +1,19 @@
+{
+    "name": "M3E4Unity.Showcase",
+    "rootNamespace": "M3E4Unity.Showcase",
+    "references": [
+        "M3E4Unity.Runtime",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "!UDONSHARP"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,19 @@
+{
+    "name": "M3E4Unity.Markers",
+    "rootNamespace": "M3E4Unity",
+    "references": [
+        "M3E4Unity.Core",
+        "M3E4Unity.Runtime",
+        "Unity.TextMeshPro",
+        "VRC.SDKBase"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,31 @@
+{
+    "name": "M3E4Unity.Editor",
+    "rootNamespace": "M3E4Unity.Editor",
+    "references": [
+        "M3E4Unity.Core",
+        "M3E4Unity.Runtime",
+        "M3E4Unity.Markers",
+        "M3E4Unity.Showcase",
+        "Unity.TextMeshPro",
+        "Unity.TextMeshPro.Editor",
+        "UdonSharp.Runtime",
+        "UdonSharp.Editor",
+        "VRC.Udon",
+        "VRC.Udon.Editor",
+        "VRC.SDK3",
+        "VRC.SDKBase",
+        "VRC.SDK3.Editor",
+        "VRC.SDKBase.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
