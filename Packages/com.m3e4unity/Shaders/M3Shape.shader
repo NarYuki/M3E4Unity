@@ -185,7 +185,7 @@ Shader "M3E4Unity/UI/Shape"
                     // p3 = (first tile, morph count, frames per morph, morph end time (s))
                     // p4 = (frame progress min, frame progress max, spring damping, spring stiffness)
                     float angle; float frame;
-                    M3LoadingIndicatorFrame(_Time.y, p3, p4, angle, frame);
+                    M3LoadingIndicatorFrame(M3Now(), p3, p4, angle, frame);
                     float2 q = M3Rotate(IN.local - 0.5, angle) + 0.5;
                     float f0 = floor(frame);
                     float d0 = M3SampleShape(_ShapeTex, _ShapeGrid, f0, q);
@@ -207,14 +207,14 @@ Shader "M3E4Unity/UI/Shape"
                 {
                     // p3 = (amplitude, wavelength, stroke width, phase speed dp/s)
                     // p4 = (phase offset dp, cap: 0 butt / 1 round, unused, unused)
-                    float d = M3WavyLine(posInQuad - rectMin, rectSize, p3, p4, _Time.y);
+                    float d = M3WavyLine(posInQuad - rectMin, rectSize, p3, p4, M3Now());
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 7.5)       // 7: wavy / flat circular arc
                 {
                     // p3 = (amplitude, wave count, stroke width, rotation deg/s)
                     // p4 = (start angle deg (clockwise from 12 o'clock), sweep deg, wave phase deg/s, unused)
-                    float d = M3WavyArc(p, rectSize, p3, p4, _Time.y);
+                    float d = M3WavyArc(p, rectSize, p3, p4, M3Now());
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 8.5)       // 8: checkbox check mark / dash, stroked path with progress
@@ -232,12 +232,12 @@ Shader "M3E4Unity/UI/Shape"
 
                 else if (kind < 10.5)      // 10: linear progress indicator part (flat / wavy, determinate / indeterminate)
                 {
-                    float d = M3LinearProgress(posInQuad - rectMin, rectSize, p3, p4, p5, _Time.y);
+                    float d = M3LinearProgress(posInQuad - rectMin, rectSize, p3, p4, p5, M3Now());
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 11.5)      // 11: circular progress indicator part
                 {
-                    float d = M3CircularProgress(p, rectSize, p3, p4, p5, _Time.y, _ShapeTex, _ShapeGrid);
+                    float d = M3CircularProgress(p, rectSize, p3, p4, p5, M3Now(), _ShapeTex, _ShapeGrid);
                     coverage = M3Coverage(d);
                 }
 

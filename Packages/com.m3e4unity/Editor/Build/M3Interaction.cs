@@ -226,12 +226,10 @@ namespace M3E4Unity.Editor
             }
 
             // Events
-            var trigger = go.GetComponent<EventTrigger>();
-            if (trigger == null) trigger = go.AddComponent<EventTrigger>();
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerDown, it, nameof(M3Interactive._Down));
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerUp, it, nameof(M3Interactive._Up));
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerEnter, it, nameof(M3Interactive._Enter));
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerExit, it, nameof(M3Interactive._Exit));
+            M3UdonBridge.WirePointer(go, EventTriggerType.PointerDown, it, nameof(M3Interactive._Down));
+            M3UdonBridge.WirePointer(go, EventTriggerType.PointerUp, it, nameof(M3Interactive._Up));
+            M3UdonBridge.WirePointer(go, EventTriggerType.PointerEnter, it, nameof(M3Interactive._Enter));
+            M3UdonBridge.WirePointer(go, EventTriggerType.PointerExit, it, nameof(M3Interactive._Exit));
             if (spec.Toggle) M3UdonBridge.Wire(button.onClick, it, nameof(M3Interactive._Click));
             M3UdonBridge.Sync(it);
             return it;

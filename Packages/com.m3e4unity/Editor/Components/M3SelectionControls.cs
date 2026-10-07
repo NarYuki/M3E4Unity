@@ -64,10 +64,9 @@ namespace M3E4Unity.Editor
             var button = root.GetComponent<Button>();
             sel.selectable = button;
             M3UdonBridge.Wire(button.onClick, sel, nameof(M3Selection._Click));
-            var trigger = root.GetComponent<UnityEngine.EventSystems.EventTrigger>();
-            M3UdonBridge.WireTrigger(trigger, UnityEngine.EventSystems.EventTriggerType.PointerDown, sel, nameof(M3Selection._Down));
-            M3UdonBridge.WireTrigger(trigger, UnityEngine.EventSystems.EventTriggerType.PointerUp, sel, nameof(M3Selection._Up));
-            M3UdonBridge.WireTrigger(trigger, UnityEngine.EventSystems.EventTriggerType.PointerExit, sel, nameof(M3Selection._Up));
+            M3UdonBridge.WirePointer(root.gameObject, UnityEngine.EventSystems.EventTriggerType.PointerDown, sel, nameof(M3Selection._Down));
+            M3UdonBridge.WirePointer(root.gameObject, UnityEngine.EventSystems.EventTriggerType.PointerUp, sel, nameof(M3Selection._Up));
+            M3UdonBridge.WirePointer(root.gameObject, UnityEngine.EventSystems.EventTriggerType.PointerExit, sel, nameof(M3Selection._Up));
         }
 
         static SelectionColorEntry Entry(Graphic g, ColorRef off, ColorRef on, ColorRef ind, ColorRef dOff, ColorRef dOn, ColorRef dInd) =>

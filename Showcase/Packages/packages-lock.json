@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.m3e4unity": {
-      "version": "file:../../M3E4Unity/Packages/com.m3e4unity",
+      "version": "file:../../Packages/com.m3e4unity",
       "depth": 0,
       "source": "local",
       "dependencies": {

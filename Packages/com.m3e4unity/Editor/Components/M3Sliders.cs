@@ -115,9 +115,8 @@ namespace M3E4Unity.Editor
             behaviour.gap = gap;
 
             M3UdonBridge.Wire(slider.onValueChanged, behaviour, nameof(M3Slider._ValueChanged));
-            var trigger = root.gameObject.AddComponent<EventTrigger>();
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerDown, behaviour, nameof(M3Slider._Down));
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerUp, behaviour, nameof(M3Slider._Up));
+            M3UdonBridge.WirePointer(root.gameObject, EventTriggerType.PointerDown, behaviour, nameof(M3Slider._Down));
+            M3UdonBridge.WirePointer(root.gameObject, EventTriggerType.PointerUp, behaviour, nameof(M3Slider._Up));
 
             // SliderDefaults.colors()
             var activeC = ColorRef.Role(SliderTokens.ActiveTrackColor);
@@ -198,9 +197,8 @@ namespace M3E4Unity.Editor
                 s.direction = Slider.Direction.LeftToRight;
                 s.interactable = enabled;
                 M3UdonBridge.Wire(s.onValueChanged, behaviour, changed);
-                var trigger = rt.gameObject.AddComponent<EventTrigger>();
-                M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerDown, behaviour, down);
-                M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerUp, behaviour, nameof(M3RangeSlider._Up));
+                M3UdonBridge.WirePointer(rt.gameObject, EventTriggerType.PointerDown, behaviour, down);
+                M3UdonBridge.WirePointer(rt.gameObject, EventTriggerType.PointerUp, behaviour, nameof(M3RangeSlider._Up));
                 return s;
             }
             var startSlider = Input("StartInput", out var startInput, nameof(M3RangeSlider._StartChanged), nameof(M3RangeSlider._StartDown));

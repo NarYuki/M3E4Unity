@@ -286,13 +286,28 @@ namespace M3E4Unity.Editor.Dev
             M3Build.Shape("Container", bar, ShapeCell.Create(ShapeKind.Fill), ColorRef.Role(ColorRole.Surface));
             var title = M3Build.Text("Title", bar, titles[0], TypeRole.HeadlineSmall, ColorRef.Role(ColorRole.OnSurface), ctx);
             title.alignment = TextAlignmentOptions.Left;
-            TopLeft(title.rectTransform, 24f, 0f, 420f, TopBarHeight);
+            const float titleW = 420f;
+            TopLeft(title.rectTransform, 24f, 0f, titleW, TopBarHeight);
+            title.enableWordWrapping = false;
+            title.overflowMode = TextOverflowModes.Ellipsis;
             app.pageTitle = title;
 
-            var controls = M3Build.Rect("Theme", bar);
+            // the theme switcher (right side of the bar); it scrolls sideways when the window is too narrow for it
+            var controlsView = M3Build.Rect("ThemeView", bar);
+            Stretch(controlsView, 24f + titleW, 0f, 24f, 0f);
+            controlsView.gameObject.AddComponent<RectMask2D>();
+            var controlsCatch = controlsView.gameObject.AddComponent<Image>();
+            controlsCatch.color = Color.clear;
+            var controls = M3Build.Rect("Theme", controlsView);
             controls.anchorMin = controls.anchorMax = new Vector2(1f, 0.5f);
             controls.pivot = new Vector2(1f, 0.5f);
-            controls.anchoredPosition = new Vector2(-24f, 0f);
+            controls.anchoredPosition = Vector2.zero;
+            var controlsScroll = controlsView.gameObject.AddComponent<ScrollRect>();
+            controlsScroll.content = controls; controlsScroll.viewport = controlsView;
+            controlsScroll.vertical = false; controlsScroll.horizontal = true;
+            controlsScroll.movementType = ScrollRect.MovementType.Clamped; controlsScroll.scrollSensitivity = 40f;
+            app.themeView = controlsView;
+            app.themeContent = controls;
             var row = M3Build.Row(controls, 12f, TextAnchor.MiddleRight);
             row.childControlWidth = false; row.childControlHeight = false;
             var fitter = controls.gameObject.AddComponent<ContentSizeFitter>();
@@ -401,6 +416,22 @@ namespace M3E4Unity.Editor.Dev
                     }
                 }
             }
+            // scroll and drag over a component must reach the scroll view it sits in
+            int blocked = 0, checkedCount = 0;
+            foreach (var relay in UnityEngine.Object.FindObjectsOfType<M3PointerEvents>(true))
+            {
+                var view = relay.GetComponentInParent<ScrollRect>(true);
+                if (view == null) continue;
+                checkedCount++;
+                var scrollTarget = UnityEngine.EventSystems.ExecuteEvents.GetEventHandler<UnityEngine.EventSystems.IScrollHandler>(relay.gameObject);
+                var dragTarget = UnityEngine.EventSystems.ExecuteEvents.GetEventHandler<UnityEngine.EventSystems.IBeginDragHandler>(relay.gameObject);
+                if (scrollTarget == null || scrollTarget.GetComponent<ScrollRect>() == null || dragTarget == null || dragTarget.GetComponent<ScrollRect>() == null)
+                {
+                    if (blocked++ < 5) Debug.Log("[M3Batch] FAIL scroll blocked at " + (scrollTarget != null ? scrollTarget.name : "null") + " for " + relay.name);
+                }
+            }
+            failures += blocked;
+            Debug.Log("[M3Batch] scroll pass-through: " + checkedCount + " components checked, " + blocked + " blocked");
             Debug.Log("[M3Batch] self-test: " + all.Length + " behaviours, " + failures + " failures");
             if (Application.isBatchMode) EditorApplication.Exit(failures == 0 ? 0 : 1);
         }

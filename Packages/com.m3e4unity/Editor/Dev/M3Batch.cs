@@ -85,6 +85,102 @@ namespace M3E4Unity.Editor.Dev
             compT.GetMethod("CompileSync", BindingFlags.Static | BindingFlags.Public)?.Invoke(null, new[] { opt });
         }
 
+        /// <summary>
+        /// Renders the shader-animated indicators (progress and loading indicators) at fixed times into
+        /// Shots/motion_sheet.png: one row per time step (M3_MOTION_START, M3_MOTION_STEP, M3_MOTION_ROWS).
+        /// </summary>
+        public static void MotionSheet()
+        {
+            int code = 0;
+            try
+            {
+                float t0 = float.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_START"), out var a) ? a : 0f;
+                float dt = float.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_STEP"), out var b) ? b : 0.1f;
+                int rows = int.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_ROWS"), out var c) ? c : 24;
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var theme = M3Canvas.DefaultTheme();
+                const float cell = 64f;
+                var builders = new Action<RectTransform, M3Context>[]
+                {
+                    (p, x) => M3ProgressIndicators.Circular(p, x, 0.6f, wavy: true),
+                    (p, x) => M3ProgressIndicators.Circular(p, x, 0.3f, wavy: true),
+                    (p, x) => M3ProgressIndicators.Circular(p, x, null, wavy: true),
+                    (p, x) => M3ProgressIndicators.Circular(p, x, null),
+                    (p, x) => M3ProgressIndicators.Loading(p, x),
+                    (p, x) => M3ProgressIndicators.Loading(p, x, contained: true),
+                    (p, x) => M3ProgressIndicators.Loading(p, x, progress: 0.3f),
+                };
+                var size = new Vector2(cell * builders.Length, cell);
+                var root = M3Canvas.Create("Motion", theme, size, worldSpace: false);
+                M3Canvas.Surface(root);
+                var ctx = new M3Context(theme);
+                for (int i = 0; i < builders.Length; i++)
+                {
+                    var slot = M3Build.Rect("Slot" + i, root);
+                    slot.anchorMin = slot.anchorMax = new Vector2(0f, 1f);
+                    slot.pivot = new Vector2(0.5f, 0.5f);
+                    slot.anchoredPosition = new Vector2(cell * (i + 0.5f), -cell / 2f);
+                    slot.sizeDelta = new Vector2(cell, cell);
+                    builders[i](slot, ctx);
+                    foreach (Transform child in slot)
+                    {
+                        var rt = (RectTransform)child;
+                        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                        rt.pivot = new Vector2(0.5f, 0.5f);
+                        rt.anchoredPosition = Vector2.zero;
+                    }
+                }
+                M3Canvas.ApplyTheme(root.gameObject);
+                M3ShapeAtlas.Save();
+                M3ShapeTiles.Save();
+
+                int scale = 3;
+                int w = Mathf.CeilToInt(size.x * scale), h = Mathf.CeilToInt(size.y * scale);
+                var rtex = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                var camGo = new GameObject("ShotCamera");
+                var cam = camGo.AddComponent<Camera>();
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.orthographic = true;
+                cam.targetTexture = rtex;
+                var canvas = root.GetComponent<Canvas>();
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera = cam;
+                canvas.planeDistance = 10f;
+                var scaler = canvas.GetComponent<CanvasScaler>();
+                scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+                scaler.scaleFactor = scale;
+                var sheet = new Texture2D(w, h * rows, TextureFormat.RGB24, false);
+                var row = new Texture2D(w, h, TextureFormat.RGB24, false);
+                Shader.SetGlobalFloat("_M3TimeOverrideOn", 1f);
+                for (int r = 0; r < rows; r++)
+                {
+                    Shader.SetGlobalFloat("_M3TimeOverride", t0 + r * dt);
+                    Canvas.ForceUpdateCanvases();
+                    cam.Render();
+                    var prev = RenderTexture.active;
+                    RenderTexture.active = rtex;
+                    row.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                    row.Apply();
+                    RenderTexture.active = prev;
+                    sheet.SetPixels(0, h * (rows - 1 - r), w, h, row.GetPixels());
+                }
+                Shader.SetGlobalFloat("_M3TimeOverrideOn", 0f);
+                sheet.Apply();
+                string outDir = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Shots");
+                Directory.CreateDirectory(outDir);
+                File.WriteAllBytes(Path.Combine(outDir, "motion_sheet.png"), sheet.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(camGo);
+                rtex.Release();
+                Debug.Log($"[M3Batch] motion sheet: {rows} rows from {t0}s every {dt}s");
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                code = 1;
+            }
+            if (Application.isBatchMode) EditorApplication.Exit(code);
+        }
+
         /// <summary>Renders every catalog page (a screen-space-camera canvas) to Shots/&lt;name&gt;.png.</summary>
         public static void RenderPages(M3Catalog.Page[] pages)
         {

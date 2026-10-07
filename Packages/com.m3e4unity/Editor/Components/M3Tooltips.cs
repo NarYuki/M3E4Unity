@@ -172,10 +172,8 @@ namespace M3E4Unity.Editor
             if (!expanded) surface.gameObject.SetActive(false);
 
             // hover on the anchor shows / dismisses (BasicTooltip: PointerEventType.Enter / Exit)
-            var trigger = anchor.GetComponent<EventTrigger>();
-            if (trigger == null) trigger = anchor.gameObject.AddComponent<EventTrigger>();
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerEnter, popup, nameof(M3Popup._Open));
-            M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerExit, popup, nameof(M3Popup._Close));
+            M3UdonBridge.WirePointer(anchor.gameObject, EventTriggerType.PointerEnter, popup, nameof(M3Popup._Open));
+            M3UdonBridge.WirePointer(anchor.gameObject, EventTriggerType.PointerExit, popup, nameof(M3Popup._Close));
             M3UdonBridge.Sync(popup);
             return root;
         }

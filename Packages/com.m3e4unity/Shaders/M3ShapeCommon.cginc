@@ -37,6 +37,11 @@ float M3SdRoundBox(float2 p, float2 halfSize, float4 radii)
     return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
 }
 
+// Animation clock: _Time.y, or a fixed time for tests (Shader.SetGlobalFloat("_M3TimeOverrideOn", 1)).
+float _M3TimeOverrideOn;
+float _M3TimeOverride;
+float M3Now() { return _M3TimeOverrideOn > 0.5 ? _M3TimeOverride : _Time.y; }
+
 // Coverage of a signed distance in dp, anti-aliased over one screen pixel.
 // pixel is set once per fragment by the caller (M3_PIXEL) so no derivative is taken in branches.
 static float M3_PIXEL = 1.0;
@@ -62,6 +67,9 @@ float M3ShadowCoverage(float d, float sigma)
     if (sigma < 1e-3) return M3Coverage(d);
     return 0.5 - 0.5 * M3Erf(d / (sigma * 1.41421356));
 }
+
+// Angle in [0, 360) for any input (HLSL fmod keeps the sign of negative values).
+float M3Wrap360(float deg) { return deg - 360.0 * floor(deg / 360.0); }
 
 // Sampling transform for a shape drawn rotated clockwise (on screen) by deg degrees.
 float2 M3Rotate(float2 v, float deg)
@@ -190,7 +198,7 @@ float M3WavyArc(float2 p, float2 size, float4 p3, float4 p4, float time)
     float sweep = clamp(p4.y, 0.0, 360.0);
     // clockwise angle from 12 o'clock
     float ang = degrees(atan2(p.x, p.y));
-    float rel = fmod(ang - start + 720.0, 360.0);
+    float rel = M3Wrap360(ang - start);
     float dRing = abs(length(p) - radius);
     float d;
     if (sweep >= 359.99 || rel <= sweep)
@@ -389,7 +397,7 @@ float M3ArcDistance(float2 p, float r, float start, float sweep, float hw)
 {
     sweep = clamp(sweep, 0.0, 360.0);
     float ang = degrees(atan2(p.x, p.y));
-    float rel = fmod(ang - start + 720.0, 360.0);
+    float rel = M3Wrap360(ang - start);
     if (sweep >= 359.99 || rel <= sweep) return abs(length(p) - r) - hw;
     float a0 = radians(start), a1 = radians(start + sweep);
     float2 e0 = r * float2(sin(a0), cos(a0));
@@ -438,12 +446,17 @@ float M3CircularProgress(float2 p, float2 size, float4 p3, float4 p4, float4 p5,
         {
             // wavy: path tile distance, clipped to the active angle range with round caps
             float frame = p4.x + saturate(p5.x) * (p4.y - 1.0);
+            // The star path starts at a vertex at 3 o'clock; Compose draws it rotated to start at
+            // 12 o'clock (toPath startAngle = 270), the indeterminate drawing is rotated by
+            // rotation + 90 as a whole (so the waves turn with the arc), and the wave offset turns
+            // the pattern back counter-clockwise by offset * 360 while the arc ends stay in place.
             float waveRot = p4.z * time;
-            float2 q = M3Rotate(p, -waveRot) / (S - w) + 0.5;
+            float patternRot = 270.0 + (p4.w < 0.5 ? 0.0 : 90.0 + rotation) - waveRot;
+            float2 q = M3Rotate(p, patternRot) / (S - w) + 0.5;
             float f0 = floor(frame);
             float dPath = lerp(M3SampleShape(tiles, grid, f0, q), M3SampleShape(tiles, grid, min(f0 + 1.0, p4.x + p4.y - 1.0), q), frame - f0) * (S - w);
             float ang = degrees(atan2(p.x, p.y));
-            float rel = fmod(ang - start + 720.0, 360.0);
+            float rel = M3Wrap360(ang - start);
             if (rel <= sweep) return abs(dPath) - hw;
             float outside = min(rel - sweep, 360.0 - rel);
             float along = radians(outside) * r;

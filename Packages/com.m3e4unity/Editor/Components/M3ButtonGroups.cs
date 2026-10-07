@@ -28,9 +28,8 @@ namespace M3E4Unity.Editor
             group.toggles = items.ConvertAll(i => i.GetComponent<M3Interactive>()).ToArray();
             for (int i = 0; i < items.Count && i < 12; i++)
             {
-                var trigger = items[i].GetComponent<EventTrigger>();
-                M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerDown, group, "_Down" + i);
-                M3UdonBridge.WireTrigger(trigger, EventTriggerType.PointerUp, group, "_Up" + i);
+                M3UdonBridge.WirePointer(items[i].gameObject, EventTriggerType.PointerDown, group, "_Down" + i);
+                M3UdonBridge.WirePointer(items[i].gameObject, EventTriggerType.PointerUp, group, "_Up" + i);
             }
             float total = 0f, height = 0f;
             foreach (var i in items)

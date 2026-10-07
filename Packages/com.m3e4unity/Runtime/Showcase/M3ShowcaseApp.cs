@@ -44,6 +44,9 @@ namespace M3E4Unity.Showcase
         public string lightGlyph;
         public string darkGlyph;
         public M3Interactive[] contrastToggles;
+        [Tooltip("The theme switcher's scroll view and content: right-aligned when it fits, scrollable from the start when it does not.")]
+        public RectTransform themeView;
+        public RectTransform themeContent;
 
         [Header("Event log")]
         public TextMeshProUGUI logText;
@@ -113,6 +116,19 @@ namespace M3E4Unity.Showcase
         }
 
         // ---- event log -----------------------------------------------------------------------------
+
+        void LateUpdate()
+        {
+            if (themeView == null || themeContent == null) return;
+            bool overflow = themeContent.rect.width > themeView.rect.width;
+            float side = overflow ? 0f : 1f;
+            if (themeContent.pivot.x != side)
+            {
+                themeContent.anchorMin = themeContent.anchorMax = new Vector2(side, 0.5f);
+                themeContent.pivot = new Vector2(side, 0.5f);
+                themeContent.anchoredPosition = Vector2.zero;
+            }
+        }
 
         void Update()
         {
