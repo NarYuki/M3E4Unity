@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3E4Unity VPM Listing</title>
+<style>
+  :root { --bg: #fef7ff; --surface: #f3edf7; --on: #1d1b20; --muted: #49454f; --primary: #6750a4; --on-primary: #fff; --outline: #cac4d0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141218; --surface: #211f26; --on: #e6e0e9; --muted: #cac4d0; --primary: #d0bcff; --on-primary: #381e72; --outline: #49454f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--on); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 32px; font-weight: 500; margin: 0 0 8px; }
+  p { color: var(--muted); margin: 0 0 16px; }
+  .card { background: var(--surface); border-radius: 24px; padding: 24px; margin: 24px 0; }
+  .button { display: inline-block; background: var(--primary); color: var(--on-primary); text-decoration: none; padding: 10px 24px; border-radius: 999px; font-weight: 500; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  code { display: block; background: var(--bg); border: 1px solid var(--outline); border-radius: 12px; padding: 12px 16px; overflow-x: auto; font-size: 14px; }
+  button.copy { border: 1px solid var(--outline); background: transparent; color: var(--primary); border-radius: 999px; padding: 8px 16px; font: inherit; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--outline); }
+  a { color: var(--primary); }
+</style>
+</head>
+<body>
+<main>
+  <h1>M3E4Unity</h1>
+  <p>Material 3 Expressive for Unity uGUI — plain Unity and VRChat worlds (UdonSharp).</p>
+
+  <div class="card">
+    <h2>Add to VRChat Creator Companion / ALCOM</h2>
+    <p>Click the button, or add the listing URL in <em>Settings &gt; Packages &gt; Add Repository</em>.</p>
+    <div class="row" style="margin-bottom:16px">
+      <a class="button" id="add" href="#">Add to VCC</a>
+      <button class="copy" id="copy" type="button">Copy URL</button>
+    </div>
+    <code id="url">https://naryuki.github.io/M3E4Unity/index.json</code>
+  </div>
+
+  <div class="card">
+    <h2>Versions</h2>
+    <table id="versions"><tr><td>Loading…</td></tr></table>
+  </div>
+
+  <p><a href="https://github.com/NarYuki/M3E4Unity">Source and documentation on GitHub</a></p>
+</main>
+<script>
+  const listing = new URL("index.json", location.href).href;
+  document.getElementById("url").textContent = listing;
+  document.getElementById("add").href = "vcc://vpm/addRepo?url=" + encodeURIComponent(listing);
+  document.getElementById("copy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(listing);
+  fetch("index.json").then(r => r.json()).then(data => {
+    const rows = [];
+    for (const [name, pkg] of Object.entries(data.packages || {}))
+      for (const [version, v] of Object.entries(pkg.versions || {}))
+        rows.push({ name, version, display: v.displayName || name, url: v.url });
+    rows.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+    const table = document.getElementById("versions");
+    table.innerHTML = "<tr><th>Package</th><th>Version</th><th></th></tr>" +
+      rows.map(r => `<tr><td>${r.display}</td><td>${r.version}</td><td><a href="${r.url}">zip</a></td></tr>`).join("");
+  }).catch(() => { document.getElementById("versions").innerHTML = "<tr><td>Could not load the listing.</td></tr>"; });
+</script>
+</body>
+</html>
