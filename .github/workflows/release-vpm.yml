@@ -99,7 +99,7 @@ jobs:
           jq --arg url "$url" --arg sha "${{ steps.zip.outputs.sha256 }}" '. + {url: $url, zipSHA256: $sha}' \
             "src/$PKG_DIR/package.json" > version.json
           jq -s --arg name "${{ steps.pkg.outputs.name }}" --arg v "${{ steps.pkg.outputs.version }}" \
-            '(.[0] + (.[1] | {name, id, url, author})) | .packages[$name].versions[$v] = .[2]' \
+            '.[2] as $ver | (.[0] + (.[1] | {name, id, url, author})) | .packages[$name].versions[$v] = $ver' \
             "$current" "$base" version.json > listing.json
           mv listing.json "$current"
           cp tools/.github/vpm/index.html site/index.html
