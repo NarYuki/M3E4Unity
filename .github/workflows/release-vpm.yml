@@ -1,0 +1,116 @@
+# Publishes a package version for VRChat Creator Companion / ALCOM (VPM) and Unity Package Manager.
+#
+# Push a tag vX.Y.Z whose version matches Packages/com.m3e4unity/package.json, or run this
+# workflow by hand with the tag. It
+#   1. zips the package folder (package.json at the zip root) and attaches it to the GitHub release,
+#   2. adds the version to the VPM listing (index.json) on the gh-pages branch, served at
+#      https://naryuki.github.io/M3E4Unity/index.json.
+name: Release (VPM listing)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vpm-listing
+  cancel-in-progress: false
+
+env:
+  PKG_DIR: Packages/com.m3e4unity
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: echo "tag=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      # tooling (listing template, landing page) from the workflow's own commit
+      - uses: actions/checkout@v4
+        with:
+          path: tools
+
+      # the package as of the tag
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          path: src
+
+      - name: Read package.json
+        id: pkg
+        run: |
+          name=$(jq -r .name "src/$PKG_DIR/package.json")
+          version=$(jq -r .version "src/$PKG_DIR/package.json")
+          if [ "v$version" != "${{ steps.tag.outputs.tag }}" ]; then
+            echo "::error::package.json version $version does not match tag ${{ steps.tag.outputs.tag }}"
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=$name-$version.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Zip the package
+        id: zip
+        run: |
+          (cd "src/$PKG_DIR" && zip -r -X -q "$GITHUB_WORKSPACE/${{ steps.pkg.outputs.zip }}" .)
+          echo "sha256=$(sha256sum "${{ steps.pkg.outputs.zip }}" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the .unitypackage
+        run: |
+          python3 -I tools/.github/vpm/make_unitypackage.py "src/$PKG_DIR" \
+            "${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}.unitypackage"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "M3E4Unity $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
+            "${{ steps.pkg.outputs.zip }}" \
+            "${{ steps.pkg.outputs.name }}-${{ steps.pkg.outputs.version }}.unitypackage"
+
+      - name: Update the listing
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/${{ steps.pkg.outputs.zip }}"
+          git -C tools fetch origin gh-pages:gh-pages 2>/dev/null || true
+          if git -C tools show-ref --verify --quiet refs/heads/gh-pages; then
+            git -C tools worktree add ../site gh-pages
+          else
+            git -C tools worktree add --orphan -b gh-pages ../site
+          fi
+          base=tools/.github/vpm/listing.json
+          current=site/index.json
+          [ -f "$current" ] || cp "$base" "$current"
+          # header fields from the template, packages kept; then this version = package.json + url + sha
+          jq --arg url "$url" --arg sha "${{ steps.zip.outputs.sha256 }}" '. + {url: $url, zipSHA256: $sha}' \
+            "src/$PKG_DIR/package.json" > version.json
+          jq -s --arg name "${{ steps.pkg.outputs.name }}" --arg v "${{ steps.pkg.outputs.version }}" \
+            '(.[0] + (.[1] | {name, id, url, author})) | .packages[$name].versions[$v] = .[2]' \
+            "$current" "$base" version.json > listing.json
+          mv listing.json "$current"
+          cp tools/.github/vpm/index.html site/index.html
+          touch site/.nojekyll
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "listing unchanged"
+          else
+            git commit -m "Listing: ${{ steps.pkg.outputs.name }} ${{ steps.pkg.outputs.version }}"
+            git push origin gh-pages
+          fi

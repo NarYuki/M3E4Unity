@@ -64,11 +64,14 @@ shapes and spring motion come from the upstream code. It runs in plain Unity and
 
 Requirements: Unity 2022.3 with uGUI and TextMesh Pro 3.0.6. For VRChat worlds, the VRChat Worlds SDK 3.x with UdonSharp.
 
-1. *Window > Package Manager > + > Add package from git URL…* and enter
-   ```
-   https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity
-   ```
-   Or clone the repository and use *Add package from disk…* with `Packages/com.m3e4unity/package.json`.
+1. Add the package in one of these ways:
+   - **VRChat Creator Companion / ALCOM**: open https://naryuki.github.io/M3E4Unity/ and press *Add to VCC*, or add `https://naryuki.github.io/M3E4Unity/index.json` in *Settings > Packages > Add Repository*. Then add *M3E4Unity* to your project from *Manage Project*; new versions show up there.
+   - **Unity Package Manager (git URL)**: *Window > Package Manager > + > Add package from git URL…* and enter the URL with the version tag:
+     ```
+     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.1.0
+     ```
+     To update, change the tag (`#v0.2.0`, …).
+   - **From a release**: download `com.m3e4unity-X.Y.Z.unitypackage` (imports into `Packages/com.m3e4unity`) or `com.m3e4unity-X.Y.Z.zip` (*Add package from tarball/disk…*) from [Releases](https://github.com/NarYuki/M3E4Unity/releases).
 2. Import *TMP Essential Resources* if the project does not have them yet (*Window > TextMeshPro > Import TMP Essential Resources*).
 3. VRChat projects only: the UdonSharp program assets for the runtime behaviours are created automatically in `Assets/M3E4Unity.Generated/Udon`. *Tools > M3E4Unity > Developer > Regenerate UdonSharp Assets* recreates them.
 
@@ -162,6 +165,7 @@ docs/images/                screenshots
 
 ## Development
 
+- Releases: bump `version` in `Packages/com.m3e4unity/package.json`, then push a tag `vX.Y.Z` with the same version. The *Release (VPM listing)* workflow attaches the package zip and `.unitypackage` to the release and adds the version to the VCC listing on GitHub Pages.
 - `tools/port_mcu.ps1` re-ports material-color-utilities; `Tests/golden` + `Tests/CoreTests` compare the port with the Java original.
 - `tools/kt_tokens.py` regenerates the tokens from Compose.
 - `Tests/UnityCompile` compiles the package against the Unity DLLs without opening Unity: `dotnet build Tests/UnityCompile -p:UnityProject=<a Unity project>`; add `-p:VRChat=false` for the plain-Unity path (the default expects a VRChat project).
@@ -192,10 +196,14 @@ M3E4Unity は **Material 3 Expressive を Unity uGUI に移植したライブラ
 
 ### 導入
 
-1. Package Manager の *Add package from git URL…* に次の URL を入力します。
-   ```
-   https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity
-   ```
+1. 次のどれかで追加します。
+   - **VRChat Creator Companion / ALCOM**：https://naryuki.github.io/M3E4Unity/ を開き、*Add to VCC* を押します。または *Settings > Packages > Add Repository* に `https://naryuki.github.io/M3E4Unity/index.json` を追加します。そのあと *Manage Project* から M3E4Unity を追加します。新しい版もそこに表示されます。
+   - **Unity Package Manager（git URL）**：*Add package from git URL…* に、版のタグ付きの URL を入力します。
+     ```
+     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.1.0
+     ```
+     更新するときは、タグ（`#v0.2.0` など）を書き換えます。
+   - **リリースから入れる**：[Releases](https://github.com/NarYuki/M3E4Unity/releases) から `com.m3e4unity-X.Y.Z.unitypackage`（`Packages/com.m3e4unity` に取り込まれます）か、`com.m3e4unity-X.Y.Z.zip` をダウンロードします。
 2. TMP Essential Resources が未導入なら、*Window > TextMeshPro* から導入します。
 3. VRChat プロジェクトでは、UdonSharp のプログラムアセットが自動で作られます。
 
