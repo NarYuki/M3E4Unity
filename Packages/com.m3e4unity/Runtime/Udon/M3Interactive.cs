@@ -97,6 +97,18 @@ namespace M3E4Unity.Udon
         [Tooltip("Stiffness of the effects spring (damping 1) of the color fades; 0 = no fades.")]
         public float colorStiffness;
 
+        [Header("Border width (ToggleButton)")]
+        [Tooltip("Outline whose width animates to 0 while selected (animateBorderStrokeAsState, FastSpatial).")]
+        public Image borderImage;
+        public float borderWidth = 1f;
+        public float borderDamping = 0.6f;
+        public float borderStiffness = 800f;
+        float borderW = -1f;
+        float borderV;
+        bool borderAnimating;
+        Material borderMaterial;
+        Material borderBase;
+
         [Header("Elevation")]
         public Image[] shadowLayers;
         [Tooltip("Shadow sprites [(layer * 4 + state) * frameCount + frame]; states: rest, hover, pressed, disabled. null = no shadow.")]
@@ -327,6 +339,7 @@ namespace M3E4Unity.Udon
             if (shapeAnimating && StepShape()) busy = true;
             if (rActive != null && (rActive[0] || rActive[1]) && StepRipple()) busy = true;
             if (colorT < 1f && StepColors()) busy = true;
+            if (borderAnimating && StepBorder()) busy = true;
             if (elevAnimating && StepElevation()) busy = true;
             if (rotateTarget != null && StepRotation()) busy = true;
             bool interactable = IsInteractable();
@@ -664,9 +677,83 @@ namespace M3E4Unity.Udon
             return (IsInteractable() ? 0 : 2) + (selected ? 1 : 0);
         }
 
+        void StartBorder(bool animated)
+        {
+            if (borderImage == null) return;
+            float target = selected ? 0f : borderWidth;
+            if (!animated || theme == null)
+            {
+                borderW = target;
+                borderV = 0f;
+                if (borderAnimating) EndBorder();
+                return;
+            }
+            if (borderW < 0f) borderW = selected ? borderWidth : 0f;
+            if (Mathf.Approximately(borderW, target) && !borderAnimating) return;
+            if (!borderAnimating)
+            {
+                if (borderBase == null) borderBase = borderImage.material;
+                borderMaterial = theme._NextRippleMaterial();
+                if (borderMaterial == null) return;
+                borderImage.material = borderMaterial;
+                borderAnimating = true;
+            }
+            lastBorderTime = Time.time;
+            StepBorder();
+            StartTicking();
+        }
+
+        float lastBorderTime;
+
+        bool StepBorder()
+        {
+            float now = Time.time;
+            float dt = Mathf.Min(now - lastBorderTime, 0.05f);
+            lastBorderTime = now;
+            float target = selected ? 0f : borderWidth;
+            float x0 = borderW - target;
+            float w = Mathf.Sqrt(borderStiffness);
+            float z = borderDamping;
+            float x;
+            float v;
+            if (z < 1f)
+            {
+                float wd = w * Mathf.Sqrt(1f - z * z);
+                float sc = (z * w * x0 + borderV) / wd;
+                float e = Mathf.Exp(-z * w * dt);
+                x = e * (x0 * Mathf.Cos(wd * dt) + sc * Mathf.Sin(wd * dt));
+                v = -z * w * x + e * (-x0 * wd * Mathf.Sin(wd * dt) + sc * wd * Mathf.Cos(wd * dt));
+            }
+            else
+            {
+                float cb = borderV + w * x0;
+                float e = Mathf.Exp(-w * dt);
+                x = (x0 + cb * dt) * e;
+                v = (cb - w * (x0 + cb * dt)) * e;
+            }
+            borderW = target + x;
+            borderV = v;
+            // Dp visibility threshold: 0.1 dp
+            bool busy = Mathf.Abs(x) > 0.01f || Mathf.Abs(v) > 0.1f;
+            Vector4 dyn = new Vector4(borderW, 0f, 0f, 0f);
+            borderMaterial.SetVector("_M3Dyn", dyn);
+            Material m = borderImage.materialForRendering;
+            if (m != null && m != borderMaterial) m.SetVector("_M3Dyn", dyn);
+            if (!busy) { borderW = target; borderV = 0f; EndBorder(); }
+            return busy;
+        }
+
+        void EndBorder()
+        {
+            borderAnimating = false;
+            if (borderBase != null) borderImage.material = borderBase;
+            borderMaterial = null;
+        }
+
         void ApplyColors(bool animated)
         {
             ApplyVisibility(animated);
+            StartBorder(animated);
             if (theme == null || colored == null || colorIndices == null) return;
             int slot = ColorSlot();
             bool fade = animated && colorStiffness > 0f && colorAnimated != null && colorAnimated.Length == colored.Length;

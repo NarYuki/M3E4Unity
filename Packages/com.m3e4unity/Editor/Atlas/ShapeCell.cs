@@ -20,6 +20,7 @@ namespace M3E4Unity.Editor
         Ellipse = 9,
         LinearProgress = 10,
         CircularProgress = 11,
+        PullArrow = 12,
     }
 
     /// <summary>

@@ -69,13 +69,16 @@ namespace M3E4Unity.Editor.Dev
                     foreach (var f in All<M3ExtendedFab>()) if (f.isActiveAndEnabled) f._Toggle();
                     foreach (var sh in All<M3Sheet>()) if (sh.isActiveAndEnabled) sh._Toggle();
                     foreach (var t in All<M3TimePicker>()) if (t.isActiveAndEnabled) t._SelMinute();
+                    foreach (var r in All<M3PullToRefresh>()) if (r.isActiveAndEnabled) r._StartRefresh();
+                    foreach (var d in All<M3DatePicker>()) if (d.isActiveAndEnabled && !d.yearPickerVisible) d._ToggleYears();
                     break;
                 case 24:
                     Shot("smoke_pressed");
                     break;
                 case 32:
                     foreach (var it in All<M3Interactive>()) if (it.isActiveAndEnabled) { it._Up(); it._Click(); it._Exit(); }
-                    foreach (var d in All<M3DatePicker>()) if (d.isActiveAndEnabled) d._Prev();
+                    foreach (var d in All<M3DatePicker>()) if (d.isActiveAndEnabled) { if (d.yearPickerVisible) d._Year4(); d._Prev(); d._Day15(); }
+                    foreach (var r in All<M3PullToRefresh>()) if (r.isActiveAndEnabled) r._FinishRefresh();
                     break;
                 case 36:
                     Shot("smoke_released");

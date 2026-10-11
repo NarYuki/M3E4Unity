@@ -392,6 +392,65 @@ float M3LinearProgress(float2 pos, float2 size, float4 p3, float4 p4, float4 p5,
     return d;
 }
 
+// Distance to the segment a-b stroked with half width hw and butt caps (an oriented box).
+float M3ButtSegment(float2 p, float2 a, float2 b, float hw)
+{
+    float2 d = b - a;
+    float L = length(d);
+    float2 u = d / max(L, 1e-5);
+    float2 q = p - a;
+    float x = dot(q, u);
+    float y = dot(q, float2(-u.y, u.x));
+    float2 e = float2(abs(x - L * 0.5) - L * 0.5, abs(y) - hw);
+    return length(max(e, 0.0)) + min(max(e.x, e.y), 0.0);
+}
+
+// PullToRefreshDefaults.Indicator's CircularArrowProgressIndicator for a distance fraction
+// (ArrowValues / drawCircularIndicator / drawArrow), in its 16 dp canvas. p is centered, y up.
+// p3 = (stroke width, arc radius (ArcRadius + stroke / 2), arrow width, arrow height), dp.
+float M3PullArrow(float2 p, float4 p3, float progress)
+{
+    float sw = p3.x, hw = sw * 0.5, r = p3.y;
+    // Discard the first 40 % of progress; overshoot up to 200 % with a non-linear tension
+    float adj = max(min(1.0, progress) - 0.4, 0.0) * 5.0 / 3.0;
+    float lt = clamp(abs(progress) - 1.0, 0.0, 2.0);
+    float tension = lt - lt * lt / 4.0;
+    float endTrim = adj * 0.8; // MaxProgressArc
+    float rotation = (-0.25 + 0.4 * adj + tension) * 0.5;
+    float startA = rotation * 360.0;
+    float endA = (rotation + endTrim) * 360.0;
+    float scale = min(1.0, adj);
+    // Compose's y-down frame; rotate(degrees = rotation) turns the whole canvas clockwise
+    float2 q = M3Rotate(float2(p.x, -p.y), -rotation);
+    float d = 1e4;
+    float sweep = endA - startA;
+    if (sweep > 0.0)
+    {
+        float ang = degrees(atan2(q.y, q.x));
+        float rel = M3Wrap360(ang - startA);
+        if (rel <= sweep) d = abs(length(q) - r) - hw;
+        else
+        {
+            // butt caps: the radial segments closing both ends
+            float a0 = radians(startA), a1 = radians(endA);
+            float2 n0 = float2(cos(a0), sin(a0)), n1 = float2(cos(a1), sin(a1));
+            d = min(M3ButtSegment(q, n0 * (r - hw), n0 * (r + hw), 0.0), M3ButtSegment(q, n1 * (r - hw), n1 * (r + hw), 0.0));
+        }
+    }
+    if (scale > 0.001)
+    {
+        // the arrow path (left corner, tip, right corner) at 3 o'clock, raised by the stroke width,
+        // then rotated by endAngle - strokeWidth (px taken as dp)
+        float aw = p3.z * scale, ah = p3.w * scale;
+        float2 A = float2(r - aw * 0.5, -sw);
+        float2 B = float2(r, -sw + ah);
+        float2 C = float2(r + aw * 0.5, -sw);
+        float2 qa = M3Rotate(q, -(endA - sw));
+        d = min(d, min(M3ButtSegment(qa, A, B, hw), M3ButtSegment(qa, B, C, hw)));
+    }
+    return d;
+}
+
 // Distance to an arc (round caps) on a circle of radius r; angles clockwise from 12 o'clock.
 float M3ArcDistance(float2 p, float r, float start, float sweep, float hw)
 {

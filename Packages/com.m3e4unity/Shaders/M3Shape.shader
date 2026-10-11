@@ -160,6 +160,9 @@ Shader "M3E4Unity/UI/Shape"
                 float2 p = posInQuad - rectMin - rectSize * 0.5; // dp, centered on the shape, y up
 
                 float kind = round(p0.x);
+                // animation clock; with _M3Dyn, w is the start time of a freshly shown indicator
+                // (indeterminate indicators start their cycle when they appear, as when composed)
+                float now = M3Now() - (_M3DynOn > 0.5 ? _M3Dyn.w : 0.0);
                 float4 radii = M3ResolveRadii(float4(p0.y, p0.z, p0.w, p1.x), rectSize);
                 float coverage = 0;
 
@@ -172,7 +175,9 @@ Shader "M3E4Unity/UI/Shape"
                 {
                     float d = M3SdRoundBox(p, rectSize * 0.5, radii);
                     float w = p1.y;
-                    coverage = M3Coverage(abs(d + w * 0.5) - w * 0.5);
+                    // animated border width (ToggleButton animateBorderStrokeAsState); none at <= 0
+                    if (_M3DynOn > 0.5) w = _M3Dyn.x;
+                    coverage = w > 0.0 ? M3Coverage(abs(d + w * 0.5) - w * 0.5) : 0.0;
                 }
                 else if (kind < 2.5)       // 2: CSS-style blurred shadow of a rounded rectangle
                 {
@@ -222,7 +227,7 @@ Shader "M3E4Unity/UI/Shape"
                     // p3 = (first tile, morph count, frames per morph, morph end time (s))
                     // p4 = (frame progress min, frame progress max, spring damping, spring stiffness)
                     float angle; float frame;
-                    M3LoadingIndicatorFrame(M3Now(), p3, p4, angle, frame);
+                    M3LoadingIndicatorFrame(now, p3, p4, angle, frame);
                     float2 q = M3Rotate(IN.local - 0.5, angle) + 0.5;
                     float f0 = floor(frame);
                     float d0 = M3SampleShape(_ShapeTex, _ShapeGrid, f0, q);
@@ -283,13 +288,20 @@ Shader "M3E4Unity/UI/Shape"
                 {
                     // runtime progress / amplitude fraction of the maximum amplitude p5.y
                     if (_M3DynOn > 0.5) { p3.x = _M3Dyn.x; p4.x = p5.y * _M3Dyn.y; }
-                    float d = M3LinearProgress(posInQuad - rectMin, rectSize, p3, p4, p5, M3Now());
+                    float d = M3LinearProgress(posInQuad - rectMin, rectSize, p3, p4, p5, now);
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 11.5)      // 11: circular progress indicator part
                 {
                     if (_M3DynOn > 0.5) { p3.x = _M3Dyn.x; p5.x = _M3Dyn.y; }
-                    float d = M3CircularProgress(p, rectSize, p3, p4, p5, M3Now(), _ShapeTex, _ShapeGrid);
+                    float d = M3CircularProgress(p, rectSize, p3, p4, p5, now, _ShapeTex, _ShapeGrid);
+                    coverage = M3Coverage(d);
+                }
+                else if (kind < 12.5)      // 12: pull-to-refresh arrow (CircularArrowProgressIndicator)
+                {
+                    // p3 = (stroke, arc radius, arrow width, arrow height); progress = p4.x or _M3Dyn.x
+                    float progress = _M3DynOn > 0.5 ? _M3Dyn.x : p4.x;
+                    float d = M3PullArrow(p, p3, progress);
                     coverage = M3Coverage(d);
                 }
 

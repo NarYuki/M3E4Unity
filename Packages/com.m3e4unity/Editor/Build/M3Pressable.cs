@@ -120,6 +120,8 @@ namespace M3E4Unity.Editor
                 var outline = M3Build.Shape("Outline", root, ShapeCell.Create(ShapeKind.Stroke).WithShape(shapeFor(rest)).WithStroke(w), ColorRef.Role(style.Outline.Value));
                 Ignore(outline);
                 if (style.AnimateOutline) Spec.AnimatedColors.Add(outline);
+                // ToggleButton: the border goes away while checked; its width animates (animateBorderStrokeAsState)
+                if (style.AnimateOutline && style.Toggle && !style.OutlineWhenChecked) { Spec.BorderImage = outline; Spec.BorderWidth = w; }
                 Spec.ShapeLayers.Add((outline, r => ShapeCell.Create(ShapeKind.Stroke).WithShape(shapeFor(r)).WithStroke(w)));
                 var on = ColorRef.Over(bg, style.Outline.Value, 1f);
                 var off = ColorRef.Over(bg, style.Outline.Value, style.DisabledOutlineOpacity);

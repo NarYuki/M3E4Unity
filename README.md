@@ -52,7 +52,7 @@ shapes and spring motion come from the upstream code. It runs in plain Unity and
 - **Buttons**: all sizes, round / square shapes, toggle buttons, connected and split buttons, button groups, segmented buttons.
 - **Icon buttons and FABs**: icon buttons (all styles and widths), FABs, extended FABs, FAB menu.
 - **Selection**: checkbox, radio button, switch, sliders (standard, discrete, centered, range).
-- **Progress**: linear and circular progress (including wavy), loading indicator.
+- **Progress**: linear and circular progress (including wavy), loading indicator, pull to refresh (Indicator and LoadingIndicator).
 - **Containment**: cards, badges, dividers, chips, lists (expressive and segmented).
 - **Input**: filled and outlined text fields, docked and full-screen search.
 - **Overlays**: menus (expressive groups), dialogs, snackbars, tooltips (plain and rich), modal bottom sheet.
@@ -128,7 +128,7 @@ Batch mode: `-executeMethod M3E4Unity.Editor.Dev.M3Showcase.BatchBuild` builds t
 ## How it works
 
 - **Shapes** are uGUI `Image`s using `M3Shape.shader`. Each sprite is a cell of a small parameter atlas encoding the kind, corner radii, stroke, blur and so on; the shader evaluates an analytic SDF, so edges stay sharp at any scale, including in VR. Shape morphs step through pre-made cells.
-- **Continuous parameters** (determinate progress and wave amplitude, ripples, elevation tweens, the checkbox mark) go to the shader through material properties (`_M3Dyn`), since Udon cannot create materials: each determinate progress indicator gets its own material in `Assets/M3E4Unity.Generated/Dynamic`, and short-lived animations borrow one from a pool of 32 shared materials on the theme. Outside VRChat a progress indicator copies its material at start, so duplicates are independent; in VRChat, build each indicator with the menu (or give a duplicate its own copy of the material).
+- **Continuous parameters** (determinate progress and wave amplitude, ripples, elevation tweens, the checkbox mark, toggle-button borders, the pull-to-refresh indicators) go to the shader through material properties (`_M3Dyn`), since Udon cannot create materials: each determinate progress indicator gets its own material in `Assets/M3E4Unity.Generated/Dynamic`, and short-lived animations borrow one from a pool of 32 shared materials on the theme. Outside VRChat a progress indicator copies its material at start, so duplicates are independent; in VRChat, build each indicator with the menu (or give a duplicate its own copy of the material).
 - **Colors** are resolved per scheme with the material-color-utilities port and pre-composited in sRGB at bake time (state layers over containers), so they match Compose in both linear and gamma projects. Each scheme is a palette; switching schemes re-colors every graphic.
 - **Elevation** uses the material-web key / ambient shadow model.
 - **Motion** steps Compose's spring equations in closed form every frame (`SendCustomEventDelayedFrames`), with the motion scheme's damping and stiffness baked in.
@@ -139,7 +139,7 @@ Batch mode: `-executeMethod M3E4Unity.Editor.Dev.M3Showcase.BatchBuild` builds t
 - VRChat (Udon) cannot set `TMP_InputField.caretColor` at runtime, so the caret uses the colors baked for the default scheme.
 - Udon receives no pointer positions, so in VRChat the pointer is found by casting the head ray (desktop) or the hand rays (VR) onto the canvas:
   - the ripple starts at that point (the center when no ray hits);
-  - the time picker dial uses it for taps and drags;
+  - the time picker dial uses it for taps and drags, and pull to refresh for the pull distance;
   - the range slider assigns a press to the closer thumb by splitting the track between the thumbs;
   - the carousel uses a ScrollRect and snaps one item at a time.
 - Date input: Udon cannot move the TMP caret, so in VRChat the `/` delimiters are added when editing ends instead of while typing (plain Unity inserts them as you type, like Compose).
@@ -226,7 +226,7 @@ Unity 2022.3 で開き、*Tools > M3E4Unity > Showcase > Build Showcase Scene* �
 
 VRChat（Udon）の制約による差分は「[Known differences](#known-differences)」に書いています。主なもの：
 
-- Udon はポインター位置を受け取れないため、VRChat ではリップルの起点と時刻ダイヤルの位置を頭（デスクトップ）／手（VR）のレイから求めています。
+- Udon はポインター位置を受け取れないため、VRChat ではリップルの起点・時刻ダイヤルの位置・プルリフレッシュの引き量を頭（デスクトップ）／手（VR）のレイから求めています。
 - 日付入力の「/」は、入力を確定したときに入ります。
 - キャレットの色は既定スキームの色で固定されます。
 

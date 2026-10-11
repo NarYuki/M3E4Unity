@@ -43,6 +43,9 @@ namespace M3E4Unity.Editor
         /// <summary>Fade every state color (list items); otherwise only the graphics in AnimatedColors.</summary>
         public bool AnimateAllColors;
         public readonly HashSet<Graphic> AnimatedColors = new HashSet<Graphic>();
+        /// <summary>ToggleButton: the outline whose width animates to 0 while checked (FastSpatial).</summary>
+        public Image BorderImage;
+        public float BorderWidth;
         public readonly List<GameObject> ShowWhenSelected = new List<GameObject>();
         public RectTransform OpticalContent;
         public float OpticalA, OpticalB, OpticalMin, OpticalMax;
@@ -291,6 +294,14 @@ namespace M3E4Unity.Editor
                 sc.entries.Add(entry);
             }
             it.colorStiffness = spec.ColorStiffness;
+            if (spec.BorderImage != null)
+            {
+                it.borderImage = spec.BorderImage;
+                it.borderWidth = spec.BorderWidth;
+                var borderSpring = MotionScheme.Get(spec.Context.Motion, MotionRole.FastSpatial);
+                it.borderDamping = borderSpring.DampingRatio;
+                it.borderStiffness = borderSpring.Stiffness;
+            }
             sc.hasRipple = spec.Ripple != null;
             sc.ripple = spec.RippleColor;
             sc.rippleSelected = spec.RippleColorSelected;

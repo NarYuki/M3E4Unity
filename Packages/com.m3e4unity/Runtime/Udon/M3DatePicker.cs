@@ -426,8 +426,55 @@ namespace M3E4Unity.Udon
         {
             int year = minYear + (yearFirstRow + cell / YearsInRow) * YearsInRow + cell % YearsInRow;
             if (year < minYear || year > maxYear) return;
+            int previous = displayedYear;
             displayedYear = year; // keeps the displayed month
             _ToggleYears();
+            if (previous != year)
+            {
+                // yearContainerColor / yearContentColor: animateColorAsState(DefaultEffects) while the grid hides
+                yearFadeFrom = previous;
+                yearFadeTo = year;
+                yearFadeT = 0f;
+                yearFadeV = 0f;
+                ApplyYearFade();
+                Kick();
+            }
+        }
+
+        int yearFadeFrom = -1;
+        int yearFadeTo = -1;
+        float yearFadeT = 1f;
+        float yearFadeV;
+
+        Color YearContent(int year, bool selected)
+        {
+            int idx = selected ? extraColors[7] : year == todayYear ? extraColors[6] : extraColors[5];
+            return idx >= 0 ? theme.Get(idx) : Color.white;
+        }
+
+        void ApplyYearFade()
+        {
+            if (yearCells == null || theme == null || extraColors == null || extraColors.Length < 9) return;
+            Color container = extraColors[8] >= 0 ? theme.Get(extraColors[8]) : Color.white;
+            Color clear = new Color(0f, 0f, 0f, 0f); // Color.Transparent
+            float k = Mathf.Clamp01(yearFadeT);
+            for (int i = 0; i < yearCells.Length; i++)
+            {
+                if (yearCells[i] == null || !yearCells[i].gameObject.activeSelf) continue;
+                int year = minYear + (yearFirstRow + i / YearsInRow) * YearsInRow + i % YearsInRow;
+                bool from = year == yearFadeFrom;
+                bool to = year == yearFadeTo;
+                if (!from && !to) continue;
+                if (yearSelected[i] != null)
+                {
+                    yearSelected[i].gameObject.SetActive(to || k < 1f);
+                    yearSelected[i].color = to ? theme.MixOklab(clear, container, k) : theme.MixOklab(container, clear, k);
+                }
+                if (from && yearRings[i] != null) yearRings[i].gameObject.SetActive(k >= 1f && year == todayYear);
+                if (yearTexts[i] != null)
+                    yearTexts[i].color = to ? theme.MixOklab(YearContent(year, false), YearContent(year, true), k)
+                                            : theme.MixOklab(YearContent(year, true), YearContent(year, false), k);
+            }
         }
 
         void LayoutYears()
@@ -560,6 +607,22 @@ namespace M3E4Unity.Udon
             }
             else { slideX = 0f; slideV = 0f; }
             ApplySlide();
+
+            // year selection colors: DefaultEffects
+            if (yearFadeT < 1f)
+            {
+                Step(yearFadeT - 1f, yearFadeV, dt, effectsStiffness);
+                yearFadeT = 1f + stepX; yearFadeV = stepV;
+                if (Mathf.Abs(stepX) < 0.002f && Mathf.Abs(yearFadeV) < 0.01f)
+                {
+                    yearFadeT = 1f;
+                    ApplyYearFade();
+                    yearFadeFrom = -1;
+                    yearFadeTo = -1;
+                    LayoutYears();
+                }
+                else { ApplyYearFade(); busy = true; }
+            }
 
             // day selection colors: DefaultEffects
             if (fadeT < 1f)
