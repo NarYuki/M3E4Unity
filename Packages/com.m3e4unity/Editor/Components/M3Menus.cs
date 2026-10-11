@@ -155,6 +155,9 @@ namespace M3E4Unity.Editor
                 MaxShape = Mathf.Max(rest, selected),
                 Spring = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial),
                 ShapeFor = shapeFor,
+                // DropdownMenuItem (selectable): animateColorAsState(containerColor, FastEffects)
+                ColorStiffness = MotionScheme.Get(ctx.Motion, MotionRole.FastEffects).Stiffness,
+                AnimateContainer = true,
             };
 
             // Surface(modifier.fillMaxWidth().padding(horizontal 4 [, vertical 2])) around the item row
@@ -189,10 +192,13 @@ namespace M3E4Unity.Editor
             }
             else if (s.SelectedLeadingIcon != null)
             {
-                // AnimatedVisibility(visible = selected)
+                // AnimatedVisibility(visible = selected): expandHorizontally(FastSpatial) + fadeIn(FastEffects),
+                // shrinkHorizontally(FastSpatial) + fadeOut(FastEffects); the hidden slot keeps the arrangement
                 var sel = M3Build.Icon("SelectedLeadingIcon", root, s.SelectedLeadingIcon, iconSize, ColorRef.Role(leadSel), ctx);
                 p.Content(sel, leadColor, leadSel);
-                p.Spec.ShowWhenSelected.Add(sel.gameObject);
+                var fastSpatial = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial);
+                float fastEffects = MotionScheme.Get(ctx.Motion, MotionRole.FastEffects).Stiffness;
+                p.Spec.ExpandReveal(sel, iconSize, false, fastSpatial, fastSpatial, fastEffects, fastEffects);
             }
 
             var textBox = M3Build.Rect("Text", root);

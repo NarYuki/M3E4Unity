@@ -38,10 +38,79 @@ namespace M3E4Unity.Editor
         public CornerShape? RippleClipShape;
 
         public readonly List<StateColorEntry> Colors = new List<StateColorEntry>();
+        /// <summary>Stiffness of the color fade spring (an effects spec); 0 = colors switch instantly.</summary>
+        public float ColorStiffness;
+        /// <summary>Fade every state color (list items); otherwise only the graphics in AnimatedColors.</summary>
+        public bool AnimateAllColors;
+        public readonly HashSet<Graphic> AnimatedColors = new HashSet<Graphic>();
         public readonly List<GameObject> ShowWhenSelected = new List<GameObject>();
         public RectTransform OpticalContent;
         public float OpticalA, OpticalB, OpticalMin, OpticalMax;
         public readonly List<GameObject> HideWhenSelected = new List<GameObject>();
+        /// <summary>Content animated in and out with the selection (AnimatedVisibility).</summary>
+        public readonly List<M3Reveal> Reveals = new List<M3Reveal>();
+
+        /// <summary>
+        /// Wraps content (in a layout row) in a slot whose width animates between 0 and size with the
+        /// selection: expandHorizontally / shrinkHorizontally + fadeIn / fadeOut. fromStart: expandFrom
+        /// Alignment.Start (the content stays at the start edge), otherwise End (the default).
+        /// </summary>
+        public M3Reveal ExpandReveal(Graphic content, float size, bool fromStart, Spring expand, Spring shrink, float fadeInStiffness, float fadeOutStiffness)
+        {
+            var parent = content.transform.parent;
+            var slot = M3Build.Rect(content.name + "Slot", parent);
+            slot.SetSiblingIndex(content.transform.GetSiblingIndex());
+            var le = slot.gameObject.AddComponent<LayoutElement>();
+            le.minHeight = le.preferredHeight = size;
+            le.minWidth = le.preferredWidth = Selected ? size : 0f;
+            slot.gameObject.AddComponent<RectMask2D>();
+            var group = slot.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = Selected ? 1f : 0f;
+            group.blocksRaycasts = false;
+            var crt = content.rectTransform;
+            crt.SetParent(slot, false);
+            float edge = fromStart ? 0f : 1f;
+            crt.anchorMin = crt.anchorMax = new Vector2(edge, 0.5f);
+            crt.pivot = new Vector2(edge, 0.5f);
+            crt.anchoredPosition = Vector2.zero;
+            crt.sizeDelta = new Vector2(size, size);
+            var rev = M3UdonBridge.Add<M3Reveal>(slot.gameObject);
+            rev.mode = 0;
+            rev.visible = Selected;
+            rev.slot = le;
+            rev.fullSize = size;
+            rev.fade = group;
+            rev.enterDamping = expand.DampingRatio; rev.enterStiffness = expand.Stiffness;
+            rev.exitDamping = shrink.DampingRatio; rev.exitStiffness = shrink.Stiffness;
+            rev.fadeInStiffness = fadeInStiffness; rev.fadeOutStiffness = fadeOutStiffness;
+            M3UdonBridge.Sync(rev);
+            Reveals.Add(rev);
+            return rev;
+        }
+
+        /// <summary>
+        /// Content that appears with scaleIn(initialScale, transformOrigin = its pivot) + fadeIn and
+        /// leaves with ExitTransition.None (SegmentedButtonDefaults.Icon).
+        /// </summary>
+        public M3Reveal ScaleReveal(Graphic content, float initialScale, Spring scaleIn, float fadeInStiffness)
+        {
+            var group = content.gameObject.AddComponent<CanvasGroup>();
+            group.alpha = Selected ? 1f : 0f;
+            group.blocksRaycasts = false;
+            var rev = M3UdonBridge.Add<M3Reveal>(content.gameObject);
+            rev.mode = 1;
+            rev.visible = Selected;
+            rev.scaleTarget = content.rectTransform;
+            rev.initialScale = initialScale;
+            rev.fade = group;
+            rev.content = null;
+            rev.exitNone = true;
+            rev.enterDamping = scaleIn.DampingRatio; rev.enterStiffness = scaleIn.Stiffness;
+            rev.fadeInStiffness = fadeInStiffness;
+            M3UdonBridge.Sync(rev);
+            Reveals.Add(rev);
+            return rev;
+        }
         public ColorRef RippleColor, RippleColorSelected;
 
         /// <summary>Elevation level per state: rest, hover, pressed, disabled (null = no shadow).</summary>
@@ -64,9 +133,6 @@ namespace M3E4Unity.Editor
 
     public static class M3Interaction
     {
-        /// <summary>Maximum ripple radius frames (time is FastOutSlowIn over 225 ms).</summary>
-        const int RippleFrames = 16;
-
         public static M3Interactive Apply(InteractionSpec spec)
         {
             var go = spec.Root.gameObject;
@@ -123,6 +189,7 @@ namespace M3E4Unity.Editor
             it.opticalMax = spec.OpticalMax;
             it.showWhenSelected = spec.ShowWhenSelected.ToArray();
             it.hideWhenSelected = spec.HideWhenSelected.ToArray();
+            it.revealWhenSelected = spec.Reveals.ToArray();
             foreach (var g in spec.ShowWhenSelected) g.SetActive(spec.Selected);
             foreach (var g in spec.HideWhenSelected) g.SetActive(!spec.Selected);
 
@@ -167,20 +234,15 @@ namespace M3E4Unity.Editor
                 spec.OpticalContent.anchoredPosition = new Vector2(ox, spec.OpticalContent.anchoredPosition.y);
             }
 
-            // Ripple: radius from 0.3 * max(w, h) to half the diagonal + 10 dp (bounded ripple), clipped to the pressed shape.
+            // Ripple: radius from 0.3 * max(w, h) to half the diagonal + 10 dp (bounded ripple), clipped to the
+            // pressed shape. Center, radius and alpha come from the runtime (_M3Dyn of a pooled material);
+            // the cell itself is the full-size ripple.
             if (spec.Ripple != null)
             {
-                var rippleFrames = new Sprite[RippleFrames];
-                for (int i = 0; i < RippleFrames; i++)
-                {
-                    float e = i / (float)(RippleFrames - 1);
-                    var cell = ShapeCell.Create(ShapeKind.Ripple);
-                    cell = spec.RippleClipShape.HasValue ? cell.WithShape(spec.RippleClipShape.Value) : cell.WithRadius(spec.RippleClipRadius);
-                    rippleFrames[i] = M3ShapeAtlas.Get(cell.WithExtra(0, 0, e, 10f));
-                }
+                var cell = ShapeCell.Create(ShapeKind.Ripple);
+                cell = spec.RippleClipShape.HasValue ? cell.WithShape(spec.RippleClipShape.Value) : cell.WithRadius(spec.RippleClipRadius);
                 it.ripple = spec.Ripple;
-                it.rippleFrames = rippleFrames;
-                spec.Ripple.sprite = rippleFrames[0];
+                spec.Ripple.sprite = M3ShapeAtlas.Get(cell.WithExtra(0, 0, 1f, 10f));
                 spec.Ripple.enabled = false;
                 // ripple color is set by the theme (palette index); keep alpha 0 until pressed
                 var c = spec.Ripple.color;
@@ -203,6 +265,12 @@ namespace M3E4Unity.Editor
                 }
                 it.shadowLayers = spec.Shadows;
                 it.shadowFrames = shadowFrames;
+                // continuous parameters of each layer and state for the elevation tween
+                var shadowParams = new Vector4[spec.Shadows.Length * 4];
+                for (int layer = 0; layer < spec.Shadows.Length; layer++)
+                for (int state = 0; state < 4; state++)
+                    shadowParams[layer * 4 + state] = M3Build.ShadowParams(spec.Elevation[state], layer);
+                it.shadowParams = shadowParams;
                 int startState = spec.Enabled ? 0 : 3;
                 for (int layer = 0; layer < spec.Shadows.Length; layer++)
                 {
@@ -215,7 +283,14 @@ namespace M3E4Unity.Editor
             // Colors (palette indices are written by the theme baker)
             var sc = go.GetComponent<M3StateColors>();
             if (sc == null) sc = go.AddComponent<M3StateColors>();
-            sc.entries = new List<StateColorEntry>(spec.Colors);
+            sc.entries = new List<StateColorEntry>();
+            foreach (var e in spec.Colors)
+            {
+                var entry = e;
+                entry.animate = spec.ColorStiffness > 0f && (spec.AnimateAllColors || spec.AnimatedColors.Contains(e.graphic));
+                sc.entries.Add(entry);
+            }
+            it.colorStiffness = spec.ColorStiffness;
             sc.hasRipple = spec.Ripple != null;
             sc.ripple = spec.RippleColor;
             sc.rippleSelected = spec.RippleColorSelected;

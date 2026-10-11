@@ -174,7 +174,7 @@ namespace M3E4Unity.Udon
                     float growth;
                     if (i > 0 && i < n - 1)
                     {
-                        float g = Mathf.Round(value[i] * Mathf.Min(Mathf.Min(expandedRatio * widths[i] / 2f, compressionLimits[i - 1]), compressionLimits[i + 1]));
+                        float g = Mathf.Floor(0.5f + value[i] * Mathf.Min(Mathf.Min(expandedRatio * widths[i] / 2f, compressionLimits[i - 1]), compressionLimits[i + 1]));
                         float gl = Mathf.Min(g, widths[i - 1]);
                         float gr = Mathf.Min(g, widths[i + 1]);
                         widths[i - 1] -= gl;
@@ -183,14 +183,14 @@ namespace M3E4Unity.Udon
                     }
                     else if (i == 0)
                     {
-                        float g = Mathf.Round(value[i] * Mathf.Min(expandedRatio * widths[i], compressionLimits[i + 1]));
+                        float g = Mathf.Floor(0.5f + value[i] * Mathf.Min(expandedRatio * widths[i], compressionLimits[i + 1]));
                         float gr = Mathf.Min(g, widths[i + 1]);
                         widths[i + 1] -= gr;
                         growth = gr;
                     }
                     else
                     {
-                        float g = Mathf.Round(value[i] * Mathf.Min(expandedRatio * widths[i], compressionLimits[i - 1]));
+                        float g = Mathf.Floor(0.5f + value[i] * Mathf.Min(expandedRatio * widths[i], compressionLimits[i - 1]));
                         float gl = Mathf.Min(g, widths[i - 1]);
                         widths[i - 1] -= gl;
                         growth = gl;

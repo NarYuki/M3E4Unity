@@ -87,9 +87,19 @@ namespace M3E4Unity.Editor
             input.navigation = new Navigation { mode = Navigation.Mode.None };
 
             // results: divider + suggestions (ListItems on the search surface color)
+            // expandVertically / shrinkVertically (expandFrom = Bottom): the results' own clip grows
+            // downwards while the content stays aligned to its bottom edge
             var results = M3Build.Rect("Results", surface);
             Place(results, 0f, h, width, DividerTokens.Thickness + resultsH);
+            results.gameObject.AddComponent<RectMask2D>();
             var group = results.gameObject.AddComponent<CanvasGroup>();
+            var resultsClip = results;
+            results = M3Build.Rect("Content", resultsClip);
+            results.anchorMin = new Vector2(0f, 0f);
+            results.anchorMax = new Vector2(1f, 0f);
+            results.pivot = new Vector2(0.5f, 0f);
+            results.anchoredPosition = Vector2.zero;
+            results.sizeDelta = new Vector2(0f, DividerTokens.Thickness + resultsH);
             var divider = M3Build.Shape("Divider", results, ShapeCell.Create(ShapeKind.Fill), ColorRef.Role(SearchViewTokens.DividerColor), false);
             Place((RectTransform)divider.transform, 0f, 0f, width, DividerTokens.Thickness);
             var bar = M3UdonBridge.Add<M3SearchBar>(root.gameObject);
@@ -106,6 +116,7 @@ namespace M3E4Unity.Editor
             bar.input = input;
             bar.surface = surface;
             bar.results = group;
+            bar.resultsClip = resultsClip;
             bar.collapsedHeight = h;
             bar.expandedHeight = expandedH;
             bar.expanded = expanded;
@@ -116,7 +127,7 @@ namespace M3E4Unity.Editor
             {
                 ColorRef.Role(ColorRole.Primary), ColorRef.Role(ColorRole.Error), ColorRef.Translucent(ColorRole.Primary, 0.4f), // cursor, error cursor, selection
             };
-            if (!expanded) results.gameObject.SetActive(false);
+            if (!expanded) { resultsClip.sizeDelta = new Vector2(width, 0f); resultsClip.gameObject.SetActive(false); }
             M3UdonBridge.Sync(bar);
             return root;
         }

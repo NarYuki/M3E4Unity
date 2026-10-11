@@ -281,7 +281,7 @@ namespace M3E4Unity.Udon
             {
                 float f = Mathf.Clamp01(fractions[i]);
                 float s = Mathf.LerpUnclamped(1f, largeScale, f);
-                Color c = Color.Lerp(c0, c1, f);
+                Color c = hasColors ? theme.MixOklab(c0, c1, f) : Color.Lerp(c0, c1, f); // Color lerp: Oklab
                 if (baseTexts[i] != null)
                 {
                     if (baseRects[i] != null) baseRects[i].localScale = new Vector3(s, s, 1f);

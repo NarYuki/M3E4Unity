@@ -1,3 +1,4 @@
+using M3E4Unity.Udon;
 using M3E4Unity.Tokens;
 using UnityEngine;
 using UnityEngine.UI;
@@ -67,7 +68,8 @@ namespace M3E4Unity.Editor
         }
 
         public static RectTransform Extended(Transform parent, M3Context ctx, string label, string icon = null,
-            ExtendedFabSize size = ExtendedFabSize.Baseline, ColorRole container = ColorRole.PrimaryContainer, bool lowered = false)
+            ExtendedFabSize size = ExtendedFabSize.Baseline, ColorRole container = ColorRole.PrimaryContainer, bool lowered = false,
+            bool expanded = true)
         {
             float height, padStart, padEnd, iconPad, iconSize, radius;
             TypeRole text;
@@ -97,20 +99,107 @@ namespace M3E4Unity.Editor
                     text = ExtendedFabPrimaryTokens.LabelTextFont;
                     break;
             }
-            float minWidth = size == ExtendedFabSize.Baseline ? 80f : height;
+            bool baseline = size == ExtendedFabSize.Baseline;
+            float minWidth = baseline ? 80f : height;
             var root = M3Build.Rect($"ExtendedFAB ({size})", parent);
-            var row = M3Build.Row(root, iconPad);
-            row.padding = new RectOffset(Mathf.RoundToInt(padStart), Mathf.RoundToInt(padEnd), 0, 0);
             var le = root.gameObject.AddComponent<LayoutElement>();
-            le.minWidth = minWidth;
             le.minHeight = le.preferredHeight = height;
             var p = new M3Pressable(root, ctx, Style(ctx, container, height, radius, lowered));
             var content = M3Colors.ContentFor(container);
-            if (icon != null) p.Content(M3Build.Icon("Icon", root, icon, iconSize, ColorRef.Role(content), ctx));
-            p.Content(M3Build.Text("Label", root, label, text, ColorRef.Role(content), ctx));
+
+            // the content row is placed by M3ExtendedFab and clipped to the container while it collapses
+            var clip = M3Build.Rect("Clip", root);
+            M3Build.Fill(clip);
+            clip.gameObject.AddComponent<RectMask2D>();
+            M3Pressable.Ignore(clip.gameObject.AddComponent<Image>());
+            clip.GetComponent<Image>().color = new Color(0, 0, 0, 0);
+            clip.GetComponent<Image>().raycastTarget = false;
+            var row = M3Build.Rect("Row", clip);
+            row.anchorMin = row.anchorMax = new Vector2(0f, 0.5f);
+            row.pivot = new Vector2(0f, 0.5f);
+            float iconW = icon != null ? iconSize : 0f;
+            if (icon != null)
+            {
+                var ic = M3Build.Icon("Icon", row, icon, iconSize, ColorRef.Role(content), ctx);
+                var irt = ic.rectTransform;
+                irt.anchorMin = irt.anchorMax = new Vector2(0f, 0.5f);
+                irt.pivot = new Vector2(0f, 0.5f);
+                irt.anchoredPosition = Vector2.zero;
+                irt.sizeDelta = new Vector2(iconSize, iconSize);
+                p.Content(ic);
+            }
+            // the label with the spacer before it (the AnimatedVisibility content)
+            var slot = M3Build.Rect("LabelSlot", row);
+            slot.anchorMin = slot.anchorMax = new Vector2(0f, 0.5f);
+            slot.pivot = new Vector2(0f, 0.5f);
+            slot.anchoredPosition = new Vector2(iconW, 0f);
+            if (baseline) slot.gameObject.AddComponent<RectMask2D>();
+            var group = slot.gameObject.AddComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            var t = M3Build.Text("Label", slot, label, text, ColorRef.Role(content), ctx);
+            float spacer = icon != null ? iconPad : 0f;
+            float textW = Mathf.Ceil(t.GetPreferredValues(label).x);
+            var trt = t.rectTransform;
+            trt.anchorMin = trt.anchorMax = new Vector2(0f, 0.5f);
+            trt.pivot = new Vector2(0f, 0.5f);
+            trt.anchoredPosition = new Vector2(spacer, 0f);
+            trt.sizeDelta = new Vector2(textW, height);
+            t.alignment = TMPro.TextAlignmentOptions.Left;
+            t.enableWordWrapping = false;
+            p.Content(t);
+            float labelW = spacer + textW;
+            slot.sizeDelta = new Vector2(labelW, height);
+            row.sizeDelta = new Vector2(iconW + labelW, height);
             p.Finish();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(root);
-            root.sizeDelta = new Vector2(Mathf.Max(minWidth, LayoutUtility.GetPreferredWidth(root)), height);
+
+            var fab = M3UdonBridge.Add<M3ExtendedFab>(root.gameObject);
+            fab.expanded = expanded;
+            fab.mode = baseline ? 1 : 0;
+            fab.root = root;
+            fab.rootLayout = le;
+            fab.row = row;
+            fab.labelGroup = group;
+            fab.labelSlot = slot;
+            fab.height = height;
+            fab.minWidthExpanded = minWidth;
+            // collapsed: FabBaselineTokens.ContainerWidth for the baseline FAB, minWidth = height for the sized ones
+            fab.minWidthCollapsed = baseline ? FabBaselineTokens.ContainerWidth : height;
+            fab.padStart = padStart;
+            fab.padEnd = padEnd;
+            fab.iconWidth = iconW;
+            fab.labelWidth = labelW;
+            fab.iconPadding = spacer;
+            var fastSpatial = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial);
+            var defaultSpatial = MotionScheme.Get(ctx.Motion, MotionRole.DefaultSpatial);
+            float fastEffects = MotionScheme.Get(ctx.Motion, MotionRole.FastEffects).Stiffness;
+            float defaultEffects = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
+            fab.expandDamping = fastSpatial.DampingRatio; fab.expandStiffness = fastSpatial.Stiffness;
+            var shrink = baseline ? defaultSpatial : fastSpatial;
+            fab.shrinkDamping = shrink.DampingRatio; fab.shrinkStiffness = shrink.Stiffness;
+            fab.fadeInStiffness = baseline ? defaultEffects : fastEffects;
+            fab.fadeOutStiffness = fastEffects;
+            M3UdonBridge.Sync(fab);
+
+            // initial layout (as M3ExtendedFab.Apply)
+            float width;
+            float rowX;
+            if (!baseline)
+            {
+                float full = Mathf.Max(height, padStart + iconW + labelW + padEnd);
+                width = expanded ? full : height;
+                rowX = padStart;
+            }
+            else
+            {
+                width = expanded ? Mathf.Max(minWidth, padStart + iconW + labelW + padEnd) : Mathf.Max(fab.minWidthCollapsed, iconW);
+                rowX = expanded ? padStart : (width - iconW) / 2f;
+                if (!expanded) slot.sizeDelta = new Vector2(0f, height);
+            }
+            group.alpha = expanded ? 1f : 0f;
+            if (!expanded) slot.gameObject.SetActive(false);
+            row.anchoredPosition = new Vector2(rowX, 0f);
+            le.minWidth = le.preferredWidth = width;
+            root.sizeDelta = new Vector2(width, height);
             return root;
         }
 

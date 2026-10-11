@@ -1,5 +1,6 @@
 #if UDONSHARP
 using UdonSharp;
+using VRC.SDKBase;
 #endif
 using TMPro;
 using UnityEngine;
@@ -8,11 +9,15 @@ namespace M3E4Unity.Udon
 {
     /// <summary>
     /// Time picker with a clock dial (TimePicker.kt AnalogTimePickerState / ClockFace / drawSelector,
-    /// 12-hour). The selector angle animates with DefaultSpatial (animateToCurrent) and snaps on taps
-    /// (onClockTextClick uses SnapSpec); the hour and minute faces cross-fade (DefaultEffects); a
-    /// tapped hour switches to the minutes after 100 ms (autoSwitchToMinute). The numbers inside the
-    /// selector are a masked OnPrimary copy of the face (the XOR blend of drawSelector).
-    /// Events: _H0 … _H11 (12, 1 … 11), _M0 … _M11 (0, 5 … 55), _SelHour, _SelMinute, _AM, _PM.
+    /// 12-hour). The dial takes the pointer like ClockDialModifier: a tap rotates the selector to the
+    /// nearest hour / 5 minutes with DefaultSpatial (onTap) and, on the hour face, switches to the
+    /// minutes after 100 ms; a drag makes the selector follow the pointer (rotateTo without animation,
+    /// any minute) and on release switches to the minutes and settles with DefaultSpatial
+    /// (onGestureEnd). The selection chips animate the selector with DefaultSpatial (animateToCurrent);
+    /// the hour and minute faces cross-fade (DefaultEffects). The numbers inside the selector are a
+    /// masked OnPrimary copy of the face (the XOR blend of drawSelector).
+    /// Events: _DialDown / _DialUp (from the dial), _SelHour, _SelMinute, _AM, _PM; _H0 … _H11 and
+    /// _M0 … _M11 select a value without animation (onClockTextClick, SnapSpec).
     /// </summary>
 #if UDONSHARP
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -39,6 +44,8 @@ namespace M3E4Unity.Udon
         public M3Interactive pmToggle;
 
         [Header("Dial")]
+        [Tooltip("The clock face (its center is the dial center); sends _DialDown / _DialUp.")]
+        public RectTransform dial;
         public float dialSize = 256f;
         public float outerRadiusRatio = 101f / 256f;     // OuterCircleToSizeRatio
         public float handleSize = 48f;                   // ClockDialSelectorHandleContainerSize
@@ -64,6 +71,14 @@ namespace M3E4Unity.Udon
         bool ticking;
         bool initialized;
         const float TwoPi = 6.2831853f;
+
+        // dial gesture
+        bool dialPressed;
+        bool dragging;
+        Vector2 pressLocal;
+        Vector2 pointerLocal;
+        int raySource;      // VRChat: 0 head, 1 right hand, 2 left hand
+        const float TouchSlop = 8f;
 
         void Start()
         {
@@ -114,6 +129,7 @@ namespace M3E4Unity.Udon
             float dt = Mathf.Min(now - lastTime, 0.05f);
             lastTime = now;
             bool busy = false;
+            if (dialPressed) { PollDial(); busy = true; }
             // DefaultSpatial (under-damped) for the angle
             float w = Mathf.Sqrt(spatialStiffness);
             float z = spatialDamping;
@@ -187,6 +203,134 @@ namespace M3E4Unity.Udon
         public void _SelHour() { SetSelection(false); }
         public void _SelMinute() { SetSelection(true); }
         public void _AutoSwitch() { SetSelection(true); }
+
+        // ---- dial pointer (ClockDialModifier) ----
+
+        public void _DialDown()
+        {
+            Init();
+            if (!PointerOnDial(true)) return;
+            dialPressed = true;
+            dragging = false;
+            pressLocal = pointerLocal;
+            Kick();
+        }
+
+        public void _DialUp()
+        {
+            if (!dialPressed) return;
+            PollDial();
+            dialPressed = false;
+            if (dragging)
+            {
+                // onDragEnd: switch to the minutes, then onGestureEnd animates to the selected value
+                dragging = false;
+                if (!minuteSelected) SetSelection(true);
+                targetAngle = EndValue(CurrentAngle());
+                Kick();
+                return;
+            }
+            Tap(pressLocal);
+        }
+
+        void PollDial()
+        {
+            if (!PointerOnDial(false)) return;
+            if (!dragging && (pointerLocal - pressLocal).magnitude > TouchSlop) dragging = true;
+            if (!dragging) return;
+            // rotateTo(atan(...), animate = false): the selector follows the pointer exactly
+            float a = Mathf.Atan2(-pointerLocal.y, pointerLocal.x);
+            targetAngle = EndValue(a);
+            angle = targetAngle;
+            angleV = 0f;
+            float fromTop = a + TwoPi / 4f;
+            bool changed;
+            if (minuteSelected)
+            {
+                int m = ((Mathf.RoundToInt(fromTop / (TwoPi / 60f)) % 60) + 60) % 60;
+                changed = m != minute;
+                minute = m;
+            }
+            else
+            {
+                int h = ((Mathf.RoundToInt(fromTop / (TwoPi / 12f)) % 12) + 12) % 12;
+                int nh = h + (hour >= 12 ? 12 : 0);
+                changed = nh != hour;
+                hour = nh;
+            }
+            Apply();
+            if (changed && changeListener != null) changeListener.SendCustomEvent("_M3TimeChanged");
+        }
+
+        void Tap(Vector2 p)
+        {
+            // onTap: the nearest hour, or the nearest 5 minutes, animated with DefaultSpatial
+            float fromTop = Mathf.Atan2(-p.y, p.x) + TwoPi / 4f;
+            int step = ((Mathf.RoundToInt(fromTop / (TwoPi / 12f)) % 12) + 12) % 12;
+            if (minuteSelected) minute = step * 5;
+            else
+            {
+                hour = step + (hour >= 12 ? 12 : 0);
+                SendCustomEventDelayedSeconds("_AutoSwitch", 0.1f);
+            }
+            targetAngle = EndValue(CurrentAngle());
+            Apply();
+            Kick();
+            if (changeListener != null) changeListener.SendCustomEvent("_M3TimeChanged");
+        }
+
+        /// <summary>The pointer position relative to the dial center (dp, y up), into pointerLocal.</summary>
+        bool PointerOnDial(bool press)
+        {
+            RectTransform rt = dial;
+            if (rt == null) return false;
+#if UDONSHARP
+            VRCPlayerApi player = Networking.LocalPlayer;
+            if (player == null) return false;
+            if (press)
+            {
+                // the pointer that pressed: a hand ray in VR, the head ray on desktop
+                if (player.IsUserInVR())
+                {
+                    if (Ray(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.RightHand), true)) { raySource = 1; return true; }
+                    if (Ray(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.LeftHand), true)) { raySource = 2; return true; }
+                    return false;
+                }
+                raySource = 0;
+                return Ray(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.Head), true);
+            }
+            VRCPlayerApi.TrackingDataType type = VRCPlayerApi.TrackingDataType.Head;
+            if (raySource == 1) type = VRCPlayerApi.TrackingDataType.RightHand;
+            else if (raySource == 2) type = VRCPlayerApi.TrackingDataType.LeftHand;
+            return Ray(rt, player.GetTrackingData(type), false);
+#else
+            Vector2 screen;
+            if (press && M3PointerEvents.LastPressFrame == Time.frameCount) screen = M3PointerEvents.LastPressPosition;
+            else if (Input.touchCount > 0) screen = Input.GetTouch(0).position;
+            else screen = Input.mousePosition;
+            Vector2 local;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, screen, M3PointerEvents.LastPressCamera, out local)) return false;
+            pointerLocal = local - rt.rect.center;
+            return true;
+#endif
+        }
+
+#if UDONSHARP
+        bool Ray(RectTransform rt, VRCPlayerApi.TrackingData data, bool mustHit)
+        {
+            Vector3 dir = data.rotation * Vector3.forward;
+            Vector3 n = rt.forward;
+            float denom = Vector3.Dot(dir, n);
+            if (Mathf.Abs(denom) < 1e-5f) return false;
+            float t = Vector3.Dot(rt.position - data.position, n) / denom;
+            if (t < 0f) return false;
+            Vector3 local = rt.InverseTransformPoint(data.position + dir * t);
+            Vector2 p = new Vector2(local.x, local.y);
+            if (mustHit && !rt.rect.Contains(p)) return false;
+            pointerLocal = p - rt.rect.center;
+            return true;
+        }
+#endif
 
         void PickHour(int value12)
         {

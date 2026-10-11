@@ -231,6 +231,7 @@ namespace M3E4Unity.Editor
             tf.spatialDamping = spatial.DampingRatio;
             tf.spatialStiffness = spatial.Stiffness;
             tf.effectsStiffness = effects.Stiffness;
+            tf.slowEffectsStiffness = MotionScheme.Get(ctx.Motion, MotionRole.SlowEffects).Stiffness;
             M3UdonBridge.Wire(input.onSelect, tf, nameof(M3TextField._Focus));
             M3UdonBridge.Wire(input.onDeselect, tf, nameof(M3TextField._Blur));
             M3UdonBridge.Wire(input.onValueChanged, tf, nameof(M3TextField._Changed));

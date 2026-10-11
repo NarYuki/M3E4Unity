@@ -80,6 +80,10 @@ namespace M3E4Unity.Udon
         float colorV;
         float placeholderAlpha;
         float placeholderV;
+        [Tooltip("SlowEffects stiffness: the placeholder fades with it from UnfocusedEmpty to Focused and from UnfocusedNotEmpty to UnfocusedEmpty.")]
+        public float slowEffectsStiffness = 800f;
+        int phase = -1;            // InputPhase: 0 Focused, 1 UnfocusedEmpty, 2 UnfocusedNotEmpty
+        float placeholderStiffness = 3800f;
         Color[] fromColors;
         int lastSlot = -1;
         float lastTime;
@@ -161,8 +165,22 @@ namespace M3E4Unity.Udon
             return focused ? 1 : 0;
         }
 
+        int Phase()
+        {
+            if (focused && Enabled()) return 0;
+            return Empty() ? 1 : 2;
+        }
+
         void Kick()
         {
+            // placeholderOpacity transitionSpec, picked per InputPhase transition
+            int ph = Phase();
+            if (phase >= 0 && ph != phase)
+            {
+                bool slow = (phase == 1 && ph == 0) || (phase == 2 && ph == 1);
+                placeholderStiffness = slow ? slowEffectsStiffness : effectsStiffness;
+            }
+            phase = ph;
             int slot = Slot();
             if (slot != lastSlot)
             {
@@ -226,7 +244,7 @@ namespace M3E4Unity.Udon
             x = placeholderAlpha - pt;
             if (Mathf.Abs(x) > 0.002f || Mathf.Abs(placeholderV) > 0.01f)
             {
-                StepSpring(x, placeholderV, dt, 1f, effectsStiffness);
+                StepSpring(x, placeholderV, dt, 1f, placeholderStiffness);
                 placeholderAlpha = pt + stepX; placeholderV = stepV; busy = true;
             }
             else { placeholderAlpha = pt; placeholderV = 0f; }
@@ -306,7 +324,7 @@ namespace M3E4Unity.Udon
                 int idx = colorIndices[i * 6 + slot];
                 if (idx < 0) continue;
                 Color c = theme.Get(idx);
-                if (blend) c = Color.LerpUnclamped(fromColors[i], c, Mathf.Clamp01(colorT));
+                if (blend) c = theme.MixOklab(fromColors[i], c, Mathf.Clamp01(colorT)); // animateColor: Oklab
                 if (placeholder != null && g == placeholder) c.a *= Mathf.Clamp01(placeholderAlpha);
                 g.color = c;
             }

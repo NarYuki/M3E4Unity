@@ -61,6 +61,7 @@ namespace M3E4Unity.Editor.Dev
         public static Page[] Build(string scenePath)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(scenePath));
+            M3ShapeAtlas.ClearDynamicMaterials();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var theme = M3Canvas.DefaultTheme();
             var pages = new List<Page>();

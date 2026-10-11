@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: M3Carousel
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: d3180eee97e613c4491634cbf924ab4e, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: dff8fb3d36e07aa4a84699428be13d51, type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: f4b82ce33b4105c45aebfd5ee6067532, type: 3}

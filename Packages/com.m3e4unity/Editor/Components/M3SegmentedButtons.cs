@@ -103,11 +103,14 @@ namespace M3E4Unity.Editor
 
                 var check = M3Build.Icon("Check", content, "check", iconSize, ColorRef.Role(style.ContentChecked.Value), ctx);
                 var crt = check.rectTransform;
+                // SegmentedButtonDefaults.Icon: fadeIn(DefaultEffects) + scaleIn(0, TransformOrigin(0, 1),
+                // FastSpatial), ExitTransition.None; the transform origin is the bottom-left corner
                 crt.anchorMin = crt.anchorMax = new Vector2(0f, 0.5f);
-                crt.pivot = new Vector2(0f, 0.5f);
-                crt.anchoredPosition = Vector2.zero;
+                crt.pivot = new Vector2(0f, 0f);
+                crt.anchoredPosition = new Vector2(0f, -crt.sizeDelta.y / 2f);
                 p.Content(check);
-                p.Spec.ShowWhenSelected.Add(check.gameObject);
+                p.Spec.ScaleReveal(check, 0f, MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial),
+                    MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness);
 
                 // label x = IconSize + IconSpacing + offset, offset -(IconSize + IconSpacing) / 2 without the icon
                 var labelHolder = M3Build.Rect("LabelOffset", content);

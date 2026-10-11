@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: M3RangeSlider
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: a647db5eb0405394d8abbc2266cea189, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 7c5aeaeeebd529f45a0d8f5f20765591, type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: 667ca602b314b0c4c8f2735dcb20ca1f, type: 3}

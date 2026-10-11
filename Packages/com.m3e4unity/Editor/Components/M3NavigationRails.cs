@@ -164,6 +164,12 @@ namespace M3E4Unity.Editor
             r.topLabelW = L.topW.ToArray(); r.topLabelH = L.topH.ToArray();
             r.startLabelW = L.startW.ToArray(); r.startLabelH = L.startH.ToArray();
             r.coloredItem = coloredItem.ToArray();
+            // AnimatedNavigationItem: StyledLabel(animateColor = true), DefaultEffects
+            var fades = new List<Graphic>();
+            foreach (var t in L.labelsTop) fades.Add(t.GetComponent<Graphic>());
+            foreach (var t in L.labelsStart) fades.Add(t.GetComponent<Graphic>());
+            r.fadeGraphics = fades.ToArray();
+            r.colorStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
             var sc = root.gameObject.AddComponent<M3SelectionColors>();
             sc.entries = entries;
             M3UdonBridge.Sync(r);

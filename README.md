@@ -123,11 +123,12 @@ At runtime:
 1. Open `Showcase/` with Unity 2022.3 (it references the package in this repository).
 2. *Tools > M3E4Unity > Showcase > Build Showcase Scene*, then press Play — or *Build Windows App* for a standalone build (`Showcase/Build/M3E4Unity Showcase.exe`).
 
-Batch mode: `-executeMethod M3E4Unity.Editor.Dev.M3Showcase.BatchBuild` builds the scene and the player (set `M3_SHOWCASE_OUT` to choose the output path). `M3E4Unity.Editor.Dev.M3Showcase.SelfTest` sends every theme / refresh event to every behaviour before `Start` and reports the ones that throw.
+Batch mode: `-executeMethod M3E4Unity.Editor.Dev.M3Showcase.BatchBuild` builds the scene and the player (set `M3_SHOWCASE_OUT` to choose the output path). `M3E4Unity.Editor.Dev.M3Showcase.SelfTest` sends every theme / refresh event to every behaviour before `Start` and reports the ones that throw. `M3E4Unity.Editor.Dev.M3PlaySmoke.Run` enters play mode, presses / releases / toggles everything on every page and fails on any logged error (frames go to `Showcase/Shots`).
 
 ## How it works
 
-- **Shapes** are uGUI `Image`s using `M3Shape.shader`. Each sprite is a cell of a small parameter atlas encoding the kind, corner radii, stroke, blur and so on; the shader evaluates an analytic SDF, so edges stay sharp at any scale, including in VR. Shape morphs and ripples step through pre-made cells.
+- **Shapes** are uGUI `Image`s using `M3Shape.shader`. Each sprite is a cell of a small parameter atlas encoding the kind, corner radii, stroke, blur and so on; the shader evaluates an analytic SDF, so edges stay sharp at any scale, including in VR. Shape morphs step through pre-made cells.
+- **Continuous parameters** (determinate progress and wave amplitude, ripples, elevation tweens, the checkbox mark) go to the shader through material properties (`_M3Dyn`), since Udon cannot create materials: each determinate progress indicator gets its own material in `Assets/M3E4Unity.Generated/Dynamic`, and short-lived animations borrow one from a pool of 32 shared materials on the theme. Outside VRChat a progress indicator copies its material at start, so duplicates are independent; in VRChat, build each indicator with the menu (or give a duplicate its own copy of the material).
 - **Colors** are resolved per scheme with the material-color-utilities port and pre-composited in sRGB at bake time (state layers over containers), so they match Compose in both linear and gamma projects. Each scheme is a palette; switching schemes re-colors every graphic.
 - **Elevation** uses the material-web key / ambient shadow model.
 - **Motion** steps Compose's spring equations in closed form every frame (`SendCustomEventDelayedFrames`), with the motion scheme's damping and stiffness baked in.
@@ -136,8 +137,9 @@ Batch mode: `-executeMethod M3E4Unity.Editor.Dev.M3Showcase.BatchBuild` builds t
 ## Known differences
 
 - VRChat (Udon) cannot set `TMP_InputField.caretColor` at runtime, so the caret uses the colors baked for the default scheme.
-- Udon receives no pointer positions, so gestures that need them are approximated:
-  - the time picker dial reacts to taps on the numbers, not to dragging;
+- Udon receives no pointer positions, so in VRChat the pointer is found by casting the head ray (desktop) or the hand rays (VR) onto the canvas:
+  - the ripple starts at that point (the center when no ray hits);
+  - the time picker dial uses it for taps and drags;
   - the range slider assigns a press to the closer thumb by splitting the track between the thumbs;
   - the carousel uses a ScrollRect and snaps one item at a time.
 - Date input: Udon cannot move the TMP caret, so in VRChat the `/` delimiters are added when editing ends instead of while typing (plain Unity inserts them as you type, like Compose).
@@ -224,7 +226,7 @@ Unity 2022.3 で開き、*Tools > M3E4Unity > Showcase > Build Showcase Scene* �
 
 VRChat（Udon）の制約による差分は「[Known differences](#known-differences)」に書いています。主なもの：
 
-- 時刻ダイヤルはドラッグではなく、数字のタップで操作します。
+- Udon はポインター位置を受け取れないため、VRChat ではリップルの起点と時刻ダイヤルの位置を頭（デスクトップ）／手（VR）のレイから求めています。
 - 日付入力の「/」は、入力を確定したときに入ります。
 - キャレットの色は既定スキームの色で固定されます。
 

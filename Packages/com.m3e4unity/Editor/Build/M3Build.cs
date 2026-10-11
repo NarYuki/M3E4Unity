@@ -214,9 +214,19 @@ namespace M3E4Unity.Editor
             margin = 12f + 8f; // fits the largest level (blur 12, spread 6, y 8) at 3 sigma
             var cell = ShapeCell.Create(ShapeKind.Shadow).WithShape(shape)
                 .WithBlur(sigma, s.Spread)
-                .WithInsets(margin, margin - s.OffsetY, margin, margin + s.OffsetY);
+                .WithInsets(margin, margin - s.OffsetY, margin, margin + s.OffsetY)
+                .WithExtra(layer); // p3.x: which _M3Dyn vector drives the layer during an elevation tween
             if (level <= 0) cell = cell.WithBlur(0, -1000f); // empty
             return cell;
+        }
+
+        /// <summary>(blur sigma, spread, y offset, opacity) of one shadow layer, interpolated by the elevation tween.</summary>
+        public static Vector4 ShadowParams(int level, int layer)
+        {
+            if (level <= 0) return Vector4.zero;
+            Elevation.Shadows(level, out var key, out var ambient);
+            var s = layer == 0 ? key : ambient;
+            return new Vector4(s.Blur * 0.5f, s.Spread, s.OffsetY, 1f);
         }
     }
 }

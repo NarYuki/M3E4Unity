@@ -12,7 +12,10 @@ namespace M3E4Unity.Udon
     /// Date picker (DatePicker.kt DatePickerContent / Month / Day): a 6 × 7 grid of 48 dp day cells
     /// for the displayed month (Sunday first, en-US formats: headline "MMM d, yyyy", month button
     /// "MMMM yyyy"), today outlined, the selected day filled. Day cells call _Day0 … _Day41; the
-    /// arrows call _Prev / _Next.
+    /// arrows call _Prev / _Next. The arrows scroll the months list (animateScrollToItem: spring(),
+    /// no bounce, StiffnessMedium): the new month slides in while a non-interactive copy of the old
+    /// one slides out. A picked day fades its container and label (dayContainerColor /
+    /// dayContentColor: animateColorAsState with DefaultEffects, in Oklab).
     /// </summary>
 #if UDONSHARP
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -36,6 +39,18 @@ namespace M3E4Unity.Udon
 #endif
 
         [Header("Parts")]
+        [Header("Month slide")]
+        [Tooltip("The month grid, moved horizontally while the months scroll.")]
+        public RectTransform month;
+        [Tooltip("The outgoing month: copies of the cells without interaction.")]
+        public RectTransform monthGhost;
+        public GameObject[] ghostCells;
+        public TextMeshProUGUI[] ghostTexts;
+        public Graphic[] ghostCircles;
+        public Graphic[] ghostRings;
+        public float monthWidth = 360f;
+        public float scrollStiffness = 1500f;   // spring(): Spring.StiffnessMedium, DampingRatioNoBouncy
+
         public TextMeshProUGUI headline;
         public string noSelectionHeadline = "Selected date";
         public TextMeshProUGUI monthYear;
@@ -137,6 +152,14 @@ namespace M3E4Unity.Udon
         float errorHeight;
         bool formatting;
         string lastInput = "";
+
+        // month scroll and day selection fade
+        float slideX;
+        float slideV;
+        int fadeFrom = -1;     // cell losing the selection (-1 = none)
+        int fadeTo = -1;       // cell gaining it
+        float fadeT = 1f;
+        float fadeV;
 
         void Start()
         {
@@ -242,27 +265,133 @@ namespace M3E4Unity.Udon
         {
             int day = cell - firstOffset + 1;
             if (day < 1 || day > daysInMonth) return;
+            int previous = selectedDay > 0 && selectedYear == displayedYear && selectedMonth == displayedMonth
+                ? selectedDay - 1 + firstOffset : -1;
             selectedYear = displayedYear;
             selectedMonth = displayedMonth;
             selectedDay = day;
             Layout();
+            if (previous != cell)
+            {
+                fadeFrom = previous;
+                fadeTo = cell;
+                fadeT = 0f;
+                fadeV = 0f;
+                // the old selection stays visible while it fades out
+                if (fadeFrom >= 0 && todayRings[fadeFrom] != null) todayRings[fadeFrom].gameObject.SetActive(false);
+                ApplyFade();
+                Kick();
+            }
             if (changeListener != null) changeListener.SendCustomEvent("_M3DateChanged");
         }
 
         public void _Prev()
         {
             if (displayedYear <= minYear && displayedMonth == 1) return;
+            CopyToGhost();
             displayedMonth--;
             if (displayedMonth < 1) { displayedMonth = 12; displayedYear--; }
+            EndFade();
             Layout();
+            // the new month enters from the left, the old one leaves to the right
+            slideX -= monthWidth;
+            Kick();
+            ApplySlide();
         }
 
         public void _Next()
         {
             if (displayedYear >= maxYear && displayedMonth == 12) return;
+            CopyToGhost();
             displayedMonth++;
             if (displayedMonth > 12) { displayedMonth = 1; displayedYear++; }
+            EndFade();
             Layout();
+            slideX += monthWidth;
+            Kick();
+            ApplySlide();
+        }
+
+        /// <summary>Shows the month currently in the grid on the ghost copy (the item scrolling away).</summary>
+        void CopyToGhost()
+        {
+            if (cells == null || ghostCells == null) return;
+            for (int i = 0; i < cells.Length && i < ghostCells.Length; i++)
+            {
+                if (ghostCells[i] == null || cells[i] == null) continue;
+                bool on = cells[i].activeSelf;
+                ghostCells[i].SetActive(on);
+                if (!on) continue;
+                if (ghostTexts[i] != null && dayTexts[i] != null) { ghostTexts[i].text = dayTexts[i].text; ghostTexts[i].color = dayTexts[i].color; }
+                if (ghostCircles[i] != null && selectedCircles[i] != null)
+                {
+                    ghostCircles[i].gameObject.SetActive(selectedCircles[i].gameObject.activeSelf);
+                    ghostCircles[i].color = selectedCircles[i].color;
+                }
+                if (ghostRings[i] != null && todayRings[i] != null)
+                {
+                    ghostRings[i].gameObject.SetActive(todayRings[i].gameObject.activeSelf);
+                    ghostRings[i].color = todayRings[i].color;
+                }
+            }
+        }
+
+        void ApplySlide()
+        {
+            if (month != null) month.anchoredPosition = new Vector2(slideX, month.anchoredPosition.y);
+            if (monthGhost != null)
+            {
+                bool show = Mathf.Abs(slideX) > 0.5f;
+                if (monthGhost.gameObject.activeSelf != show) monthGhost.gameObject.SetActive(show);
+                // the ghost is the neighbouring item: one month width before / after
+                float gx = slideX > 0f ? slideX - monthWidth : slideX + monthWidth;
+                monthGhost.anchoredPosition = new Vector2(gx, monthGhost.anchoredPosition.y);
+            }
+        }
+
+        // ---- day selection fade (animateColorAsState, DefaultEffects) ----
+
+        void EndFade()
+        {
+            fadeFrom = -1;
+            fadeTo = -1;
+            fadeT = 1f;
+            fadeV = 0f;
+        }
+
+        Color DayContent(int cell, bool selected)
+        {
+            int day = cell - firstOffset + 1;
+            bool isToday = todayYear == displayedYear && todayMonth == displayedMonth && todayDay == day;
+            int idx = selected ? extraColors[2] : isToday ? extraColors[1] : extraColors[0];
+            return idx >= 0 ? theme.Get(idx) : Color.white;
+        }
+
+        void ApplyFade()
+        {
+            if (theme == null || extraColors == null || extraColors.Length < 5) return;
+            Color container = extraColors[3] >= 0 ? theme.Get(extraColors[3]) : Color.white;
+            // Color.Transparent is transparent black
+            Color clear = new Color(0f, 0f, 0f, 0f);
+            float k = Mathf.Clamp01(fadeT);
+            if (fadeFrom >= 0)
+            {
+                if (selectedCircles[fadeFrom] != null)
+                {
+                    selectedCircles[fadeFrom].gameObject.SetActive(fadeT < 1f);
+                    selectedCircles[fadeFrom].color = theme.MixOklab(container, clear, k);
+                }
+                if (dayTexts[fadeFrom] != null) dayTexts[fadeFrom].color = theme.MixOklab(DayContent(fadeFrom, true), DayContent(fadeFrom, false), k);
+            }
+            if (fadeTo >= 0)
+            {
+                if (selectedCircles[fadeTo] != null)
+                {
+                    selectedCircles[fadeTo].gameObject.SetActive(true);
+                    selectedCircles[fadeTo].color = theme.MixOklab(clear, container, k);
+                }
+                if (dayTexts[fadeTo] != null) dayTexts[fadeTo].color = theme.MixOklab(DayContent(fadeTo, false), DayContent(fadeTo, true), k);
+            }
         }
 
         // ---- year picker -------------------------------------------------------------------------
@@ -422,6 +551,30 @@ namespace M3E4Unity.Udon
             }
             else { inputA = ta; inputAV = 0f; }
             ApplyMode();
+
+            // months list scroll: spring() (critically damped, StiffnessMedium) towards the new item
+            if (Mathf.Abs(slideX) > 0.5f || Mathf.Abs(slideV) > 1f)
+            {
+                Step(slideX, slideV, dt, scrollStiffness);
+                slideX = stepX; slideV = stepV; busy = true;
+            }
+            else { slideX = 0f; slideV = 0f; }
+            ApplySlide();
+
+            // day selection colors: DefaultEffects
+            if (fadeT < 1f)
+            {
+                Step(fadeT - 1f, fadeV, dt, effectsStiffness);
+                fadeT = 1f + stepX; fadeV = stepV;
+                if (Mathf.Abs(stepX) < 0.002f && Mathf.Abs(fadeV) < 0.01f)
+                {
+                    fadeT = 1f;
+                    ApplyFade();
+                    EndFade();
+                    Layout();
+                }
+                else { ApplyFade(); busy = true; }
+            }
 
             if (busy) SendCustomEventDelayedFrames("_Tick", 1);
             else ticking = false;

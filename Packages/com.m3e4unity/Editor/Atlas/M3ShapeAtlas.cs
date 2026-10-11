@@ -31,6 +31,62 @@ namespace M3E4Unity.Editor
         public static Material Material { get { Load(); return material; } }
         public static int CellCount { get { Load(); return nextCell; } }
 
+        public const string DynamicFolder = GeneratedFolder + "/Dynamic";
+
+        /// <summary>
+        /// A new material asset that copies the shared M3Shape material and turns on its runtime
+        /// parameters (_M3DynOn). Components whose shader parameters change continuously at runtime
+        /// (determinate progress, ripples) draw with their own copy and set _M3Dyn on it, since Udon
+        /// cannot create materials.
+        /// </summary>
+        public static Material CreateDynamicMaterial(string name, Vector4 initial)
+        {
+            Load();
+            Directory.CreateDirectory(DynamicFolder);
+            var m = new Material(material) { name = name };
+            m.SetFloat("_M3DynOn", 1f);
+            m.SetVector("_M3Dyn", initial);
+            m.SetVector("_M3Dyn2", Vector4.zero);
+            var path = AssetDatabase.GenerateUniqueAssetPath($"{DynamicFolder}/{name}.mat");
+            AssetDatabase.CreateAsset(m, path);
+            return m;
+        }
+
+        /// <summary>
+        /// Deletes the per-component dynamic materials (not the ripple pool). For tools that rebuild a
+        /// whole scene, so repeated builds do not pile up materials.
+        /// </summary>
+        public static void ClearDynamicMaterials()
+        {
+            if (!AssetDatabase.IsValidFolder(DynamicFolder)) return;
+            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { DynamicFolder }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!Path.GetFileName(path).StartsWith("RipplePool_")) AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        /// <summary>The shared pool of ripple materials (RipplePool_00 …), created on first use.</summary>
+        public static Material[] RipplePool(int count = 32)
+        {
+            Load();
+            var pool = new Material[count];
+            for (int i = 0; i < count; i++)
+            {
+                var path = $"{DynamicFolder}/RipplePool_{i:D2}.mat";
+                var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (m == null)
+                {
+                    Directory.CreateDirectory(DynamicFolder);
+                    m = new Material(material) { name = $"RipplePool_{i:D2}" };
+                    m.SetFloat("_M3DynOn", 1f);
+                    AssetDatabase.CreateAsset(m, path);
+                }
+                pool[i] = m;
+            }
+            return pool;
+        }
+
         static void Load()
         {
             if (texture != null && spritesByKey != null) return;

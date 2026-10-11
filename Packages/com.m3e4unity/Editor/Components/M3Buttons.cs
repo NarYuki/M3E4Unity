@@ -249,6 +249,9 @@ namespace M3E4Unity.Editor
                 Enabled = enabled,
                 ShapeFor = shapeFor,
                 CheckedOverlay = checkedOverlay,
+                // ToggleButton: animateBorderStrokeAsState fades the border color with DefaultEffects
+                ColorStiffness = toggle && c.Outline.HasValue ? MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness : 0f,
+                AnimateOutline = toggle,
             });
 
             // content above the container layers

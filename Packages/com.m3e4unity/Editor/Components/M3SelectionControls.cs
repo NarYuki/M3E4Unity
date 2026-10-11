@@ -115,6 +115,8 @@ namespace M3E4Unity.Editor
             var spring = MotionScheme.Get(ctx.Motion, MotionRole.DefaultSpatial);
             sel.checkDamping = spring.DampingRatio;
             sel.checkStiffness = spring.Stiffness;
+            sel.effectsStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
+            sel.fastEffectsStiffness = MotionScheme.Get(ctx.Motion, MotionRole.FastEffects).Stiffness;
             WireSelection(root, sel);
             stateHost.selectable.interactable = enabled;
 
@@ -156,6 +158,7 @@ namespace M3E4Unity.Editor
             var spring = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial);
             sel.springDamping = spring.DampingRatio;
             sel.springStiffness = spring.Stiffness;
+            sel.effectsStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
             WireSelection(root, sel);
             stateHost.selectable.interactable = enabled;
 

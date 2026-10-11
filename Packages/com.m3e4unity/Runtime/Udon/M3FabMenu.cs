@@ -161,8 +161,8 @@ namespace M3E4Unity.Udon
             }
             if (theme != null && extraColors != null && extraColors.Length >= 4)
             {
-                if (fabContainer != null) fabContainer.color = Color.Lerp(theme.Get(extraColors[0]), theme.Get(extraColors[1]), p);
-                Color ic = Color.Lerp(theme.Get(extraColors[2]), theme.Get(extraColors[3]), p);
+                if (fabContainer != null) fabContainer.color = theme.MixOklab(theme.Get(extraColors[0]), theme.Get(extraColors[1]), Mathf.Clamp01(p)); // Color lerp: Oklab
+                Color ic = theme.MixOklab(theme.Get(extraColors[2]), theme.Get(extraColors[3]), Mathf.Clamp01(p));
                 if (iconOpenText != null) iconOpenText.color = ic;
                 if (iconCloseText != null) iconCloseText.color = ic;
             }

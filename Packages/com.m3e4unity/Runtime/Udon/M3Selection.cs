@@ -10,6 +10,11 @@ namespace M3E4Unity.Udon
     /// Checkbox, radio button and switch (Checkbox.kt, RadioButton.kt, Switch.kt).
     /// kind 0 = checkbox (states off / on / indeterminate), 1 = radio, 2 = switch.
     /// The hover state layer and ripple come from an M3Interactive on the same object.
+    /// Checkbox: the check draw fraction and the center gravitation animate with DefaultSpatial (the
+    /// gravitation snaps when leaving Off; unchecking snaps both after 100 ms); box, border and check
+    /// colors fade in Oklab with DefaultEffects (FastEffects towards Off). Radio: the dot grows with
+    /// FastSpatial and its color fades with DefaultEffects. Disabled states snap. While the check mark
+    /// animates it is drawn with a pooled material whose _M3Dyn = (check fraction, gravitation).
     /// </summary>
 #if UDONSHARP
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -57,6 +62,17 @@ namespace M3E4Unity.Udon
         public float springStiffness = 800f;
         public float checkDamping = 0.8f;     // DefaultSpatial (expressive)
         public float checkStiffness = 380f;
+        public float effectsStiffness = 1600f;     // DefaultEffects
+        public float fastEffectsStiffness = 3800f; // FastEffects
+
+        // color fade
+        Color[] colorFrom;
+        float colorT = 1f;
+        float colorV;
+        float colorStiffness;
+        int prevState = -1;
+        Material markMaterial;
+        Material markBase;
 
         // animated values
         float a, av, aTarget;   // checkbox check fraction / radio dot size / switch thumb offset
@@ -73,8 +89,9 @@ namespace M3E4Unity.Udon
             b = bTarget;
             av = 0f;
             bv = 0f;
+            prevState = state;
             Apply();
-            ApplyColors();
+            ApplyColors(false);
         }
 
         bool Interactable()
@@ -124,19 +141,47 @@ namespace M3E4Unity.Udon
             if (kind == 2) Changed();
         }
 
-        public void _M3ThemeChanged() { ApplyColors(); }
-        public void _M3Refresh() { ApplyColors(); Changed(); }
+        public void _M3ThemeChanged() { colorT = 1f; ApplyColors(false); }
+        public void _M3Refresh() { colorT = 1f; ApplyColors(false); Changed(); }
 
         void Changed()
         {
             Targets();
-            ApplyColors();
+            bool changed = prevState >= 0 && prevState != state;
+            // checkCenterGravitationShiftFraction: snap() when leaving Off
+            if (kind == 0 && changed && prevState == 0) { b = bTarget; bv = 0f; }
             if (kind == 0 && state == 0)
             {
                 // Checkbox: unchecking snaps after SnapAnimationDelay (100 ms)
                 uncheckAt = Time.time + 0.1f;
             }
+            // colors: Checkbox colorAnimationSpecForState (FastEffects towards Off, else DefaultEffects),
+            // RadioButton DefaultEffects, Switch not animated; disabled snaps
+            colorStiffness = 0f;
+            if (changed && Interactable())
+            {
+                if (kind == 0) colorStiffness = state == 0 ? fastEffectsStiffness : effectsStiffness;
+                else if (kind == 1) colorStiffness = effectsStiffness;
+            }
+            ApplyColors(colorStiffness > 0f);
+            prevState = state;
+            if (kind == 0 && changed) { UseMarkMaterial(); Apply(); }
             Start_();
+        }
+
+        void UseMarkMaterial()
+        {
+            if (mark == null || theme == null || markMaterial != null) return;
+            if (markBase == null) markBase = mark.material;
+            markMaterial = theme._NextRippleMaterial();
+            if (markMaterial != null) mark.material = markMaterial;
+        }
+
+        void ReleaseMarkMaterial()
+        {
+            if (markMaterial == null) return;
+            if (markBase != null) mark.material = markBase;
+            markMaterial = null;
         }
 
         void Start_()
@@ -191,6 +236,8 @@ namespace M3E4Unity.Udon
                 // checkbox gravitation: snap when coming from off, else DefaultSpatial
                 if (Step(1, dt, damping, stiffness)) busy = true;
             }
+            if (colorT < 1f && StepColors(dt)) busy = true;
+            if (!busy) ReleaseMarkMaterial();
             Apply();
             if (busy) SendCustomEventDelayedFrames("_Tick", 1);
             else ticking = false;
@@ -234,7 +281,18 @@ namespace M3E4Unity.Udon
         {
             if (kind == 0)
             {
-                if (mark == null || markFrames == null || checkFrameCount <= 0) return;
+                if (mark == null) return;
+                if (markMaterial != null)
+                {
+                    // the exact check fraction and gravitation through the material
+                    Vector4 dyn = new Vector4(Mathf.Max(a, 0f), Mathf.Clamp01(b), 0f, 0f);
+                    markMaterial.SetVector("_M3Dyn", dyn);
+                    Material m = mark.materialForRendering;
+                    if (m != null && m != markMaterial) m.SetVector("_M3Dyn", dyn);
+                    mark.enabled = a > 0.001f || state != 0;
+                    return;
+                }
+                if (markFrames == null || checkFrameCount <= 0) return;
                 int indeterminateFrames = markFrames.Length - checkFrameCount;
                 if (b > 0.001f && indeterminateFrames > 0)
                 {
@@ -263,9 +321,19 @@ namespace M3E4Unity.Udon
             }
         }
 
-        void ApplyColors()
+        void ApplyColors(bool animated)
         {
             if (theme == null || colored == null || colorIndices == null) return;
+            if (animated)
+            {
+                // animateColorAsState: from the colors shown now
+                if (colorFrom == null || colorFrom.Length != colored.Length) colorFrom = new Color[colored.Length];
+                for (int i = 0; i < colored.Length; i++) if (colored[i] != null) colorFrom[i] = colored[i].color;
+                colorT = 0f;
+                colorV = 0f;
+                return;
+            }
+            colorT = 1f;
             int slot = state + (Interactable() ? 0 : 3);
             for (int i = 0; i < colored.Length; i++)
             {
@@ -273,6 +341,28 @@ namespace M3E4Unity.Udon
                 int idx = colorIndices[i * 6 + slot];
                 if (idx >= 0) colored[i].color = theme.Get(idx);
             }
+        }
+
+        bool StepColors(float dt)
+        {
+            // effects springs are critically damped
+            float w = Mathf.Sqrt(colorStiffness);
+            float x0 = colorT - 1f;
+            float cb = colorV + w * x0;
+            float e = Mathf.Exp(-w * dt);
+            float x = (x0 + cb * dt) * e;
+            colorV = (cb - w * (x0 + cb * dt)) * e;
+            colorT = 1f + x;
+            bool busy = Mathf.Abs(x) > 0.002f || Mathf.Abs(colorV) > 0.01f;
+            if (!busy) { colorT = 1f; colorV = 0f; }
+            int slot = state + (Interactable() ? 0 : 3);
+            for (int i = 0; i < colored.Length; i++)
+            {
+                if (colored[i] == null) continue;
+                int idx = colorIndices[i * 6 + slot];
+                if (idx >= 0) colored[i].color = theme.MixOklab(colorFrom[i], theme.Get(idx), colorT);
+            }
+            return busy;
         }
     }
 }

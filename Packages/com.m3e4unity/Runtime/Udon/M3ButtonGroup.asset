@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: M3ButtonGroup
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: c4e3382ba0dc30e49863231d7d2c6362, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 252b47f76e7a1714b9662c0146e2e877, type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: 8cb015a5f5d7af74db027690e0f4634d, type: 3}

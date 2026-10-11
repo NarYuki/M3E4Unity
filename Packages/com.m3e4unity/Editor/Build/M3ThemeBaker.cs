@@ -18,6 +18,7 @@ namespace M3E4Unity.Editor
         public static void Bake(M3Theme runtime, M3ThemeAsset theme)
         {
             var root = runtime.transform;
+            runtime.rippleMaterials = M3ShapeAtlas.RipplePool();
             var palette = new List<ColorRef>();
             var index = new Dictionary<ColorRef, int>();
 
@@ -54,6 +55,7 @@ namespace M3E4Unity.Editor
                 it.theme = runtime;
                 it.colored = colored;
                 it.colorIndices = indices;
+                it.colorAnimated = sc.entries.Select(e => e.animate).ToArray();
                 if (sc.hasRipple)
                 {
                     it.rippleColor = Idx(sc.ripple);

@@ -228,8 +228,13 @@ namespace M3E4Unity.Editor
             float dialY = selH + gap;
             var dialRt = M3Build.Rect("ClockFace", page);
             TopLeft(dialRt, (width - dial) / 2f, dialY, dial, dial);
-            M3Build.Shape("Dial", dialRt, ShapeCell.Create(ShapeKind.Fill).WithShape(CornerShape.Full),
+            // ClockDialModifier: the whole dial takes taps and drags
+            var dialImg = M3Build.Shape("Dial", dialRt, ShapeCell.Create(ShapeKind.Fill).WithShape(CornerShape.Full),
                 ColorRef.Role(vibrant ? ColorRole.SurfaceContainerLowest : TimePickerTokens.ClockDialColor));
+            dialImg.raycastTarget = true;
+            M3UdonBridge.WirePointer(dialImg.gameObject, EventTriggerType.PointerDown, picker, nameof(M3TimePicker._DialDown));
+            M3UdonBridge.WirePointer(dialImg.gameObject, EventTriggerType.PointerUp, picker, nameof(M3TimePicker._DialUp));
+            picker.dial = dialRt;
             var hourFace = Face(dialRt, ctx, Hours, "Hours", false, picker, "_H");
             var minuteFace = Face(dialRt, ctx, Minutes, "Minutes", false, picker, "_M");
             var lineImg = M3Build.Shape("Track", dialRt, ShapeCell.Create(ShapeKind.Fill), ColorRef.Role(TimePickerTokens.ClockDialSelectorTrackContainerColor), false);
@@ -350,17 +355,9 @@ namespace M3E4Unity.Editor
                 M3Build.Fill(t.rectTransform);
                 t.alignment = TextAlignmentOptions.Center;
                 t.raycastTarget = false;
-                if (!selectedCopy && picker != null)
-                {
-                    var hit = box.gameObject.AddComponent<Image>();
-                    hit.color = new Color(0, 0, 0, 0);
-                    var b = box.gameObject.AddComponent<Button>();
-                    b.transition = Selectable.Transition.None;
-                    var nav = b.navigation; nav.mode = Navigation.Mode.None; b.navigation = nav;
-                    M3UdonBridge.Wire(b.onClick, picker, eventPrefix + i);
-                }
             }
-            if (selectedCopy) group.blocksRaycasts = false;
+            // the numbers are text only: the dial behind them takes the pointer
+            group.blocksRaycasts = false;
             return group;
         }
 

@@ -131,6 +131,7 @@ namespace M3E4Unity.Editor.Dev
 
         public static void BuildScene()
         {
+            M3ShapeAtlas.ClearDynamicMaterials();
             Directory.CreateDirectory(Folder);
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var camGo = new GameObject("Camera");

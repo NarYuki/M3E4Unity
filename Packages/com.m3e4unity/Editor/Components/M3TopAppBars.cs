@@ -116,6 +116,15 @@ namespace M3E4Unity.Editor
                     new SelectionColorEntry { graphic = container, off = c0, on = c1, indeterminate = c0, disabledOff = c0, disabledOn = c1, disabledIndeterminate = c0 },
                 };
                 if (scroll != null) M3UdonBridge.Wire(scroll.onValueChanged, behaviour, nameof(M3TopAppBar._Scrolled));
+                if (scroll != null && twoRows)
+                {
+                    // settleAppBar after a drag / fling (the EventTrigger sits on the ScrollRect itself)
+                    behaviour.snapStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
+                    var trigger = scroll.GetComponent<UnityEngine.EventSystems.EventTrigger>();
+                    if (trigger == null) trigger = scroll.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+                    M3UdonBridge.WireTrigger(trigger, UnityEngine.EventSystems.EventTriggerType.BeginDrag, behaviour, nameof(M3TopAppBar._BeginDrag));
+                    M3UdonBridge.WireTrigger(trigger, UnityEngine.EventSystems.EventTriggerType.EndDrag, behaviour, nameof(M3TopAppBar._EndDrag));
+                }
                 M3UdonBridge.Sync(behaviour);
             }
             return root;

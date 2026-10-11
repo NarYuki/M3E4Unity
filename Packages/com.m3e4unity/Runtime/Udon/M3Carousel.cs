@@ -111,7 +111,8 @@ namespace M3E4Unity.Udon
             if (Mathf.Abs(v) > 400f) target = dragStartItem + (v > 0f ? 1 : -1);
             target = Mathf.Clamp(target, Mathf.Max(0, dragStartItem - 1), Mathf.Min(snapScroll.Length - 1, dragStartItem + 1));
             snapTarget = snapScroll[target];
-            snapV = 0f;
+            // the snap spring starts with the release velocity (SnapFlingBehavior: animateTo(initialVelocity))
+            snapV = v;
             if (scrollRect != null) scrollRect.velocity = Vector2.zero;
             if (snapping) return;
             snapping = true;

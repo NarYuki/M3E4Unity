@@ -22,6 +22,8 @@ namespace M3E4Unity.Udon
         public TMP_InputField input;
         public RectTransform surface;
         public CanvasGroup results;
+        [Tooltip("The results' clip (expandVertically from the bottom): its height follows the animation.")]
+        public RectTransform resultsClip;
         public float collapsedHeight = 56f;
         public float expandedHeight = 296f;
         public bool expanded;
@@ -99,6 +101,7 @@ namespace M3E4Unity.Udon
         void Apply()
         {
             if (surface != null) surface.sizeDelta = new Vector2(surface.sizeDelta.x, Mathf.Lerp(collapsedHeight, expandedHeight, t));
+            if (resultsClip != null) resultsClip.sizeDelta = new Vector2(resultsClip.sizeDelta.x, Mathf.Max(0f, (expandedHeight - collapsedHeight) * t));
             if (results != null)
             {
                 results.alpha = t;

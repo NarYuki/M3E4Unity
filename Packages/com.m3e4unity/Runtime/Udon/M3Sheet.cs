@@ -6,10 +6,12 @@ using UnityEngine;
 namespace M3E4Unity.Udon
 {
     /// <summary>
-    /// Modal sheet / drawer motion: the sheet slides along `direction` (a unit vector in canvas
-    /// units, e.g. (0,-1) for a bottom sheet that hides downwards) with a tween
-    /// (BottomSheetAnimationSpec: 300 ms FastOutSlowIn; drawers use their own spec), and the scrim
-    /// fades with an effects spring (ModalBottomSheet: DefaultEffects). Hidden sheets are deactivated.
+    /// Modal sheet / drawer motion: the sheet slides by hiddenOffset with a tween or with springs
+    /// (ModalBottomSheet: show DefaultSpatial, hide FastEffects; drawers: open DefaultSpatial, close
+    /// FastEffects). The scrim either fades with an effects spring towards the target
+    /// (ModalBottomSheet: DefaultEffects) or follows the offset (drawers). Spring overshoot past the open
+    /// position scales the sheet up instead of leaving a gap (DrawerSheet horizontalScaleUp, BottomSheet
+    /// verticalScaleUp with the content scaled back down). Hidden sheets are deactivated.
     /// </summary>
 #if UDONSHARP
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -35,6 +37,11 @@ namespace M3E4Unity.Udon
         public float closeStiffness = 3800f;
         [Tooltip("Overshoot past the open position scales the sheet up from this edge (horizontalScaleUp) instead of leaving a gap.")]
         public float sheetWidth = 360f;
+        [Tooltip("Bottom sheets: overshoot scales the sheet up vertically (verticalScaleUp); these children are scaled back down (verticalScaleDown).")]
+        public bool verticalScaleUp;
+        public RectTransform[] scaleDown;
+        [Tooltip("Scrim alpha = open fraction of the offset (drawers); otherwise its own effects spring.")]
+        public bool scrimFollowsOffset = true;
         float velocity;
 
         Vector2 shownPosition;
@@ -145,7 +152,7 @@ namespace M3E4Unity.Udon
             scrimValue = to + x;
             bool scrimBusy = Mathf.Abs(x) > 0.002f || Mathf.Abs(scrimV) > 0.01f;
             if (!scrimBusy) { scrimValue = to; scrimV = 0f; }
-            if (useSpring) { scrimValue = Mathf.Clamp01(t); scrimBusy = false; }
+            if (useSpring && scrimFollowsOffset) { scrimValue = Mathf.Clamp01(t); scrimBusy = false; }
             Apply();
             if (p < 1f || scrimBusy) SendCustomEventDelayedFrames("_Tick", 1);
             else
@@ -160,9 +167,23 @@ namespace M3E4Unity.Udon
             if (sheet != null)
             {
                 sheet.anchoredPosition = shownPosition + hiddenOffset * (1f - Mathf.Min(t, 1f));
-                // DrawerSheet.horizontalScaleUp: overshoot widens the sheet instead of moving it
-                float over = Mathf.Max(0f, t - 1f) * Mathf.Abs(hiddenOffset.x);
-                sheet.localScale = new Vector3(sheetWidth > 0f ? 1f + over / sheetWidth : 1f, 1f, 1f);
+                if (verticalScaleUp)
+                {
+                    // BottomSheet verticalScaleUp: scaleY = (height + overflow) / height (the sheet's pivot is its bottom edge)
+                    float h = sheet.rect.height;
+                    float overY = Mathf.Max(0f, t - 1f) * Mathf.Abs(hiddenOffset.y);
+                    float sy = h > 0f ? (h + overY) / h : 1f;
+                    sheet.localScale = new Vector3(1f, sy, 1f);
+                    if (scaleDown != null)
+                        for (int i = 0; i < scaleDown.Length; i++)
+                            if (scaleDown[i] != null) scaleDown[i].localScale = new Vector3(1f, 1f / sy, 1f);
+                }
+                else
+                {
+                    // DrawerSheet.horizontalScaleUp: overshoot widens the sheet instead of moving it
+                    float over = Mathf.Max(0f, t - 1f) * Mathf.Abs(hiddenOffset.x);
+                    sheet.localScale = new Vector3(sheetWidth > 0f ? 1f + over / sheetWidth : 1f, 1f, 1f);
+                }
             }
             if (scrim != null)
             {

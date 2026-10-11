@@ -67,8 +67,23 @@ namespace M3E4Unity.Editor
             motion.root = root.gameObject;
             motion.open = open;
             motion.hiddenOffset = new Vector2(0f, -sheetHeight);
-            motion.durationSeconds = 0.3f;
-            motion.easing = new Vector4(0.4f, 0f, 0.2f, 1f); // FastOutSlowInEasing
+            // BottomSheet: showMotionSpec = DefaultSpatial, hideMotionSpec = FastEffects
+            motion.useSpring = true;
+            var showSpring = MotionScheme.Get(ctx.Motion, MotionRole.DefaultSpatial);
+            var hideSpring = MotionScheme.Get(ctx.Motion, MotionRole.FastEffects);
+            motion.openDamping = showSpring.DampingRatio; motion.openStiffness = showSpring.Stiffness;
+            motion.closeDamping = hideSpring.DampingRatio; motion.closeStiffness = hideSpring.Stiffness;
+            motion.verticalScaleUp = true;
+            // the drag handle and the content keep their size (verticalScaleDown), pinned to the top
+            content.pivot = new Vector2(0.5f, 1f);
+            content.offsetMin = Vector2.zero;
+            content.offsetMax = new Vector2(0f, -top);
+            var keep = new System.Collections.Generic.List<RectTransform> { content };
+            var handleRt = sheet.Find("DragHandle") as RectTransform;
+            if (handleRt != null) keep.Add(handleRt);
+            motion.scaleDown = keep.ToArray();
+            // ModalBottomSheet: the scrim animates with DefaultEffects towards visible / hidden
+            motion.scrimFollowsOffset = false;
             motion.scrimStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
             // tapping the scrim dismisses (onDismissRequest)
             var scrimButton = scrim.gameObject.AddComponent<Button>();

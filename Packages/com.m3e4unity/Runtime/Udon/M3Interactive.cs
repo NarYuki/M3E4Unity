@@ -1,5 +1,6 @@
 #if UDONSHARP
 using UdonSharp;
+using VRC.SDKBase;
 #endif
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,9 +13,13 @@ namespace M3E4Unity.Udon
     /// <list type="bullet">
     /// <item>shape morphing between the rest, pressed and selected shapes (rememberAnimatedShape,
     /// springs from the motion scheme), by swapping pre-baked shape frames;</item>
-    /// <item>the bounded ripple (RippleAnimation: 75 ms fade in, 225 ms FastOutSlowIn radius,
-    /// 150 ms fade out);</item>
-    /// <item>toggle selection, disabled colors and elevation per state.</item>
+    /// <item>the bounded ripple (RippleAnimation: from the touch point, 75 ms fade in, 225 ms
+    /// FastOutSlowIn radius and linear move to the center, 150 ms fade out once the fade in has
+    /// finished; up to two overlapping ripples), drawn with a pooled material of the theme;</item>
+    /// <item>toggle selection and disabled colors, optionally faded in Oklab with an effects spring
+    /// (list items, menu items, toggle borders...);</item>
+    /// <item>elevation per state, tweened like animateElevation (in: 120 ms FastOutSlowIn; out:
+    /// 150 ms, 120 ms from hover, CubicBezier(0.4, 0, 0.6, 1); disabled snaps).</item>
     /// </list>
     /// Hover and focus state layers are plain uGUI ColorTint transitions and need no script.
     /// The EventTrigger on the same object sends _Down, _Up, _Enter and _Exit.
@@ -44,6 +49,8 @@ namespace M3E4Unity.Udon
         public GameObject[] showWhenSelected;
         [Tooltip("Objects hidden while selected.")]
         public GameObject[] hideWhenSelected;
+        [Tooltip("Content that animates in while selected (AnimatedVisibility), e.g. a filter chip's check mark.")]
+        public M3Reveal[] revealWhenSelected;
 
         [Header("Shape morph")]
         public Image[] shapeLayers;
@@ -76,7 +83,6 @@ namespace M3E4Unity.Udon
 
         [Header("Ripple")]
         public Image ripple;
-        public Sprite[] rippleFrames;
         [Tooltip("Palette index of the ripple color (unselected, selected).")]
         public int rippleColor = -1;
         public int rippleColorSelected = -1;
@@ -86,11 +92,17 @@ namespace M3E4Unity.Udon
         public Graphic[] colored;
         [Tooltip("Palette indices, 4 per graphic: enabled, enabled+selected, disabled, disabled+selected. -1 = keep.")]
         public int[] colorIndices;
+        [Tooltip("Per graphic: fade its color changes (animateColor) instead of switching.")]
+        public bool[] colorAnimated;
+        [Tooltip("Stiffness of the effects spring (damping 1) of the color fades; 0 = no fades.")]
+        public float colorStiffness;
 
         [Header("Elevation")]
         public Image[] shadowLayers;
         [Tooltip("Shadow sprites [(layer * 4 + state) * frameCount + frame]; states: rest, hover, pressed, disabled. null = no shadow.")]
         public Sprite[] shadowFrames;
+        [Tooltip("Shadow parameters [layer * 4 + state] = (blur sigma, spread, y offset, opacity) for the elevation tween.")]
+        public Vector4[] shadowParams;
         int currentFrame;
 
         // shape spring state
@@ -101,10 +113,30 @@ namespace M3E4Unity.Udon
         float shapeStart;     // time of the last retarget
         bool shapeAnimating;
 
-        // ripple state
-        float rippleStart;
-        float rippleRelease = -1f;
-        bool rippleActive;
+        // ripple state: slot 0 is the newest ripple, slot 1 an older one still fading out
+        float[] rStart;
+        float[] rRelease;
+        Vector2[] rOrigin;
+        bool[] rActive;
+        Material rippleMaterial;
+        Material baseMaterial;
+
+        // color fade state
+        Color[] colorFrom;
+        float colorT = 1f;
+        float colorV;
+
+        // elevation tween state
+        int elevState = -1;
+        Vector4[] elevFrom;
+        Vector4[] elevNow;
+        int elevTarget;
+        float elevStart;
+        float elevDuration;
+        bool elevIncoming;
+        bool elevAnimating;
+        Material elevMaterial;
+        Material baseShadowMaterial;
 
         bool pressed;
         bool hovered;
@@ -118,8 +150,10 @@ namespace M3E4Unity.Udon
             shapeTarget = shapeValue;
             if (ripple != null) ripple.enabled = false;
             lastInteractable = IsInteractable();
+            if (shadowLayers != null && shadowLayers.Length > 0 && shadowLayers[0] != null) baseShadowMaterial = shadowLayers[0].material;
             ApplyShape();
-            ApplyColors();
+            ApplyColors(false);
+            elevState = ElevationState();
             ApplyElevation();
         }
 
@@ -190,7 +224,7 @@ namespace M3E4Unity.Udon
                 for (int i = 0; i < exclusiveWith.Length; i++)
                     if (exclusiveWith[i] != null && exclusiveWith[i] != this) exclusiveWith[i]._Deselect();
             Retarget();
-            ApplyColors();
+            ApplyColors(true);
             StartTicking();
             if (selectionListener != null) selectionListener.SendCustomEvent("_M3SelectionChanged");
         }
@@ -201,7 +235,7 @@ namespace M3E4Unity.Udon
             if (selected) return;
             selected = true;
             Retarget();
-            ApplyColors();
+            ApplyColors(true);
             StartTicking();
         }
 
@@ -210,7 +244,7 @@ namespace M3E4Unity.Udon
             if (!selected) return;
             selected = false;
             Retarget();
-            ApplyColors();
+            ApplyColors(true);
             StartTicking();
         }
 
@@ -220,7 +254,7 @@ namespace M3E4Unity.Udon
             lastInteractable = IsInteractable();
             if (!lastInteractable) pressed = false;
             Retarget();
-            ApplyColors();
+            ApplyColors(true);
             ApplyElevation();
             StartTicking();
         }
@@ -239,7 +273,8 @@ namespace M3E4Unity.Udon
 
         public void _M3ThemeChanged()
         {
-            ApplyColors();
+            colorT = 1f;
+            ApplyColors(false);
             UpdateRippleColor();
         }
 
@@ -290,7 +325,9 @@ namespace M3E4Unity.Udon
         {
             bool busy = false;
             if (shapeAnimating && StepShape()) busy = true;
-            if (rippleActive && StepRipple()) busy = true;
+            if (rActive != null && (rActive[0] || rActive[1]) && StepRipple()) busy = true;
+            if (colorT < 1f && StepColors()) busy = true;
+            if (elevAnimating && StepElevation()) busy = true;
             if (rotateTarget != null && StepRotation()) busy = true;
             bool interactable = IsInteractable();
             if (interactable != lastInteractable) _M3Refresh();
@@ -403,12 +440,38 @@ namespace M3E4Unity.Udon
 
         // ---- ripple ----
 
+        void EnsureRipple()
+        {
+            if (rStart != null) return;
+            rStart = new float[2];
+            rRelease = new float[2];
+            rOrigin = new Vector2[2];
+            rActive = new bool[2];
+        }
+
         void StartRipple()
         {
-            if (ripple == null || rippleFrames == null || rippleFrames.Length == 0) return;
-            rippleStart = Time.time;
-            rippleRelease = -1f;
-            rippleActive = true;
+            if (ripple == null) return;
+            EnsureRipple();
+            if (baseMaterial == null) baseMaterial = ripple.material;
+            if (!rActive[0] && !rActive[1])
+            {
+                // a pooled material for this press (and an overlapping one)
+                rippleMaterial = theme != null ? theme._NextRippleMaterial() : null;
+                if (rippleMaterial != null) ripple.material = rippleMaterial;
+            }
+            else if (rActive[0])
+            {
+                // the previous ripple keeps animating in the second slot (already finished: it fades out)
+                rStart[1] = rStart[0];
+                rRelease[1] = rRelease[0] >= 0f ? rRelease[0] : Time.time;
+                rOrigin[1] = rOrigin[0];
+                rActive[1] = true;
+            }
+            rStart[0] = Time.time;
+            rRelease[0] = -1f;
+            rOrigin[0] = PressPoint();
+            rActive[0] = true;
             UpdateRippleColor();
             ripple.enabled = true;
             StepRipple();
@@ -416,9 +479,55 @@ namespace M3E4Unity.Udon
 
         void ReleaseRipple()
         {
-            if (!rippleActive) return;
-            rippleRelease = Time.time;
+            if (rActive == null || !rActive[0]) return;
+            if (rRelease[0] < 0f) rRelease[0] = Time.time;
         }
+
+        /// <summary>The press position relative to the ripple's center (dp, y up); zero when unknown.</summary>
+        Vector2 PressPoint()
+        {
+            RectTransform rt = ripple.rectTransform;
+            Vector2 center = rt.rect.center;
+#if UDONSHARP
+            // VRChat sends UI events without a position: cast the pointer ray (head on desktop, hands in VR)
+            VRCPlayerApi player = Networking.LocalPlayer;
+            if (player == null) return Vector2.zero;
+            bool found;
+            if (player.IsUserInVR())
+            {
+                found = RayPoint(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.RightHand));
+                if (!found) found = RayPoint(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.LeftHand));
+            }
+            else
+            {
+                found = RayPoint(rt, player.GetTrackingData(VRCPlayerApi.TrackingDataType.Head));
+            }
+            return found ? rayHit - center : Vector2.zero;
+#else
+            if (M3PointerEvents.LastPressFrame != Time.frameCount) return Vector2.zero;
+            Vector2 local;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rt, M3PointerEvents.LastPressPosition, M3PointerEvents.LastPressCamera, out local))
+                return Vector2.zero;
+            return local - center;
+#endif
+        }
+
+#if UDONSHARP
+        Vector2 rayHit;
+
+        bool RayPoint(RectTransform rt, VRCPlayerApi.TrackingData data)
+        {
+            Vector3 dir = data.rotation * Vector3.forward;
+            Vector3 n = rt.forward;
+            float denom = Vector3.Dot(dir, n);
+            if (Mathf.Abs(denom) < 1e-5f) return false;
+            float t = Vector3.Dot(rt.position - data.position, n) / denom;
+            if (t < 0f) return false;
+            Vector3 local = rt.InverseTransformPoint(data.position + dir * t);
+            rayHit = new Vector2(local.x, local.y);
+            return rt.rect.Contains(rayHit);
+        }
+#endif
 
         void UpdateRippleColor()
         {
@@ -434,65 +543,106 @@ namespace M3E4Unity.Udon
 
         float rippleAlpha = 1f;
 
-        bool StepRipple()
+        /// <summary>RippleAnimation of one slot: x, y = center (dp from the shape center), z = radius progress, w = alpha.</summary>
+        Vector4 RippleState(int i)
         {
-            float t = Time.time - rippleStart;
-            // radius: 225 ms FastOutSlowIn (cubic-bezier 0.4, 0, 0.2, 1)
-            float radiusFraction = FastOutSlowIn(Mathf.Clamp01(t / 0.225f));
-            int frame = Mathf.Clamp(Mathf.RoundToInt(radiusFraction * (rippleFrames.Length - 1)), 0, rippleFrames.Length - 1);
-            if (ripple.sprite != rippleFrames[frame]) ripple.sprite = rippleFrames[frame];
-            // alpha: 75 ms linear fade in; after release (and after the fade in), 150 ms linear fade out
+            if (!rActive[i]) return Vector4.zero;
+            float t = Time.time - rStart[i];
+            // fadeIn() launches together: alpha 75 ms linear, radius 225 ms FastOutSlowIn, center 225 ms linear
+            float radius = FastOutSlowIn(Mathf.Clamp01(t / 0.225f));
+            Vector2 c = rOrigin[i] * (1f - Mathf.Clamp01(t / 0.225f));
             float alpha = Mathf.Clamp01(t / 0.075f);
-            bool fadingOut = false;
-            if (rippleRelease >= 0f)
+            if (rRelease[i] >= 0f)
             {
-                float outStart = Mathf.Max(rippleRelease, rippleStart + 0.075f);
-                float tOut = Time.time - outStart;
-                if (tOut >= 0f)
+                if (t < 0.225f)
                 {
-                    alpha = 1f - Mathf.Clamp01(tOut / 0.15f);
-                    fadingOut = true;
+                    // finish() while still fading in: draw at full alpha
+                    alpha = 1f;
                 }
                 else
                 {
-                    // released while fading in: Compose jumps to full alpha
-                    alpha = 1f;
+                    // fadeOut() (150 ms linear) starts once fadeIn() has completed and finish() was called
+                    float outStart = Mathf.Max(rRelease[i], rStart[i] + 0.225f);
+                    alpha = 1f - Mathf.Clamp01((Time.time - outStart) / 0.15f);
+                    if (alpha <= 0f)
+                    {
+                        rActive[i] = false;
+                        return Vector4.zero;
+                    }
                 }
             }
-            Color c = ripple.color;
-            c.a = alpha * rippleAlpha;
-            ripple.color = c;
-            if (fadingOut && alpha <= 0f)
+            return new Vector4(c.x, c.y, radius, alpha);
+        }
+
+        bool StepRipple()
+        {
+            Vector4 a = RippleState(0);
+            Vector4 b = RippleState(1);
+            Color col = ripple.color;
+            if (rippleMaterial != null)
+            {
+                rippleMaterial.SetVector("_M3Dyn", a);
+                rippleMaterial.SetVector("_M3Dyn2", b);
+                Material m = ripple.materialForRendering;
+                if (m != null && m != rippleMaterial)
+                {
+                    m.SetVector("_M3Dyn", a);
+                    m.SetVector("_M3Dyn2", b);
+                }
+                col.a = rippleAlpha;
+            }
+            else
+            {
+                // no material pool (theme not re-applied): fade the static full-size ripple
+                col.a = Mathf.Max(a.w, b.w) * rippleAlpha;
+            }
+            ripple.color = col;
+            if (!rActive[0] && !rActive[1])
             {
                 ripple.enabled = false;
-                rippleActive = false;
+                if (rippleMaterial != null && baseMaterial != null) ripple.material = baseMaterial;
+                rippleMaterial = null;
                 return false;
             }
             return true;
         }
 
-        float FastOutSlowIn(float x)
+        static float Bezier(float x1, float y1, float x2, float y2, float x)
         {
-            // cubic-bezier(0.4, 0, 0.2, 1): solve x(t) by Newton, return y(t)
             if (x <= 0f) return 0f;
             if (x >= 1f) return 1f;
-            float t = x;
-            for (int i = 0; i < 8; i++)
+            float lo = 0f;
+            float hi = 1f;
+            float s = x;
+            for (int i = 0; i < 24; i++)
             {
-                float u = 1f - t;
-                float bx = 3f * u * u * t * 0.4f + 3f * u * t * t * 0.2f + t * t * t;
-                float dx = 3f * u * u * 0.4f + 6f * u * t * (0.2f - 0.4f) + 3f * t * t * (1f - 0.2f);
-                if (Mathf.Abs(dx) < 1e-5f) break;
-                t = Mathf.Clamp01(t - (bx - x) / dx);
+                s = (lo + hi) * 0.5f;
+                float u = 1f - s;
+                float bx = 3f * u * u * s * x1 + 3f * u * s * s * x2 + s * s * s;
+                if (bx < x) lo = s; else hi = s;
             }
-            float uu = 1f - t;
-            return 3f * uu * t * t + t * t * t;
+            float v = 1f - s;
+            return 3f * v * v * s * y1 + 3f * v * s * s * y2 + s * s * s;
+        }
+
+        float FastOutSlowIn(float x)
+        {
+            return Bezier(0.4f, 0f, 0.2f, 1f, x);
         }
 
         // ---- colors & elevation ----
 
-        void ApplyVisibility()
+        void ApplyVisibility(bool animated)
         {
+            if (revealWhenSelected != null)
+            {
+                for (int i = 0; i < revealWhenSelected.Length; i++)
+                {
+                    if (revealWhenSelected[i] == null) continue;
+                    if (animated) revealWhenSelected[i].SetVisible(selected);
+                    else revealWhenSelected[i].SnapVisible(selected);
+                }
+            }
             if (showWhenSelected != null)
             {
                 for (int i = 0; i < showWhenSelected.Length; i++)
@@ -509,39 +659,153 @@ namespace M3E4Unity.Udon
             }
         }
 
-        void ApplyColors()
+        int ColorSlot()
         {
-            ApplyVisibility();
+            return (IsInteractable() ? 0 : 2) + (selected ? 1 : 0);
+        }
+
+        void ApplyColors(bool animated)
+        {
+            ApplyVisibility(animated);
             if (theme == null || colored == null || colorIndices == null) return;
-            bool enabled = IsInteractable();
-            int slot = (enabled ? 0 : 2) + (selected ? 1 : 0);
+            int slot = ColorSlot();
+            bool fade = animated && colorStiffness > 0f && colorAnimated != null && colorAnimated.Length == colored.Length;
+            if (fade)
+            {
+                // animateColor: continue from the colors shown now
+                if (colorFrom == null || colorFrom.Length != colored.Length) colorFrom = new Color[colored.Length];
+                for (int i = 0; i < colored.Length; i++) if (colored[i] != null) colorFrom[i] = colored[i].color;
+                colorT = 0f;
+                colorV = 0f;
+                lastColorTime = Time.time;
+                StartTicking();
+            }
             for (int i = 0; i < colored.Length; i++)
             {
                 Graphic g = colored[i];
                 if (g == null) continue;
+                if (fade && colorAnimated[i]) continue;
                 int idx = colorIndices[i * 4 + slot];
                 if (idx < 0) continue;
                 g.color = theme.Get(idx);
             }
         }
 
+        float lastColorTime;
+
+        bool StepColors()
+        {
+            if (theme == null || colored == null || colorFrom == null || colorAnimated == null) { colorT = 1f; return false; }
+            float now = Time.time;
+            float dt = Mathf.Min(now - lastColorTime, 0.05f);
+            lastColorTime = now;
+            // effects springs are critically damped
+            float w = Mathf.Sqrt(colorStiffness);
+            float x0 = colorT - 1f;
+            float cb = colorV + w * x0;
+            float e = Mathf.Exp(-w * dt);
+            float x = (x0 + cb * dt) * e;
+            colorV = (cb - w * (x0 + cb * dt)) * e;
+            colorT = 1f + x;
+            bool busy = Mathf.Abs(x) > 0.002f || Mathf.Abs(colorV) > 0.01f;
+            if (!busy) { colorT = 1f; colorV = 0f; }
+            int slot = ColorSlot();
+            for (int i = 0; i < colored.Length; i++)
+            {
+                Graphic g = colored[i];
+                if (g == null || !colorAnimated[i]) continue;
+                int idx = colorIndices[i * 4 + slot];
+                if (idx < 0) continue;
+                g.color = theme.MixOklab(colorFrom[i], theme.Get(idx), colorT);
+            }
+            return busy;
+        }
+
+        int ElevationState()
+        {
+            if (!IsInteractable()) return 3;
+            if (pressed) return 2;
+            if (hovered) return 1;
+            return 0;
+        }
+
         void ApplyElevation()
         {
             if (shadowLayers == null || shadowFrames == null || shadowLayers.Length == 0) return;
             int frames = frameCount > 0 ? frameCount : 1;
-            int state = 0;
-            if (!IsInteractable()) state = 3;
-            else if (pressed) state = 2;
-            else if (hovered) state = 1;
+            int state = ElevationState();
             int frame = Mathf.Clamp(currentFrame, 0, frames - 1);
+            bool tween = shadowParams != null && shadowParams.Length >= shadowLayers.Length * 4 && theme != null;
+            if (tween && elevState >= 0 && state != elevState)
+            {
+                if (state == 3 || elevState == 3)
+                {
+                    // enabled <-> disabled: snapTo
+                    if (elevAnimating) EndElevation();
+                }
+                else
+                {
+                    if (elevFrom == null) { elevFrom = new Vector4[shadowLayers.Length]; elevNow = new Vector4[shadowLayers.Length]; }
+                    for (int i = 0; i < shadowLayers.Length; i++)
+                        elevFrom[i] = elevAnimating ? elevNow[i] : shadowParams[i * 4 + elevState];
+                    // animateElevation: incoming spec of the new interaction, or outgoing spec of the one that ended
+                    elevIncoming = state != 0;
+                    elevDuration = elevIncoming ? 0.12f : (elevState == 1 ? 0.12f : 0.15f);
+                    elevStart = Time.time;
+                    elevTarget = state;
+                    if (!elevAnimating)
+                    {
+                        elevMaterial = theme._NextRippleMaterial();
+                        if (elevMaterial != null)
+                            for (int i = 0; i < shadowLayers.Length; i++) if (shadowLayers[i] != null) shadowLayers[i].material = elevMaterial;
+                    }
+                    elevAnimating = elevMaterial != null;
+                    if (elevAnimating) StartTicking();
+                }
+            }
+            elevState = state;
             for (int i = 0; i < shadowLayers.Length; i++)
             {
                 Image img = shadowLayers[i];
                 if (img == null) continue;
                 Sprite s = shadowFrames[(i * 4 + state) * frames + frame];
+                // while tweening any shadow cell of this shape frame gives the geometry; _M3Dyn sets the rest
+                if (elevAnimating) for (int k = 0; k < 4 && s == null; k++) s = shadowFrames[(i * 4 + k) * frames + frame];
                 if (img.sprite != s) img.sprite = s;
                 img.enabled = s != null;
             }
+            if (elevAnimating) StepElevation();
+        }
+
+        bool StepElevation()
+        {
+            float t = Mathf.Clamp01((Time.time - elevStart) / elevDuration);
+            // DefaultIncomingSpec: FastOutSlowIn; outgoing specs: CubicBezier(0.4, 0, 0.6, 1)
+            float k = elevIncoming ? Bezier(0.4f, 0f, 0.2f, 1f, t) : Bezier(0.4f, 0f, 0.6f, 1f, t);
+            for (int i = 0; i < shadowLayers.Length; i++)
+                elevNow[i] = Vector4.Lerp(elevFrom[i], shadowParams[i * 4 + elevTarget], k);
+            Vector4 key = elevNow[0];
+            Vector4 ambient = shadowLayers.Length > 1 ? elevNow[1] : Vector4.zero;
+            elevMaterial.SetVector("_M3Dyn", key);
+            elevMaterial.SetVector("_M3Dyn2", ambient);
+            for (int i = 0; i < shadowLayers.Length; i++)
+            {
+                if (shadowLayers[i] == null) continue;
+                Material m = shadowLayers[i].materialForRendering;
+                if (m != null && m != elevMaterial) { m.SetVector("_M3Dyn", key); m.SetVector("_M3Dyn2", ambient); }
+            }
+            if (t < 1f) return true;
+            EndElevation();
+            ApplyElevation();
+            return false;
+        }
+
+        void EndElevation()
+        {
+            // back to the shared material and the static cells of the current state
+            elevAnimating = false;
+            for (int i = 0; i < shadowLayers.Length; i++)
+                if (shadowLayers[i] != null && baseShadowMaterial != null) shadowLayers[i].material = baseShadowMaterial;
         }
     }
 }

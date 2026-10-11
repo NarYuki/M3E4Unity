@@ -87,6 +87,9 @@ namespace M3E4Unity.Editor
                 CheckedPressedShape = pressed,
                 MaxShape = Mathf.Max(pressed, selected),
                 Spring = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial),
+                // InteractiveListItem: every color animates with colorAnimationSpec = DefaultEffects
+                ColorStiffness = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness,
+                AnimateAllColors = true,
             };
             if (roundTop || roundBottom)
             {

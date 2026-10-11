@@ -17,6 +17,8 @@ namespace M3E4Unity
         public ColorRef enabledSelected;
         public ColorRef disabled;
         public ColorRef disabledSelected;
+        /// <summary>Animate changes of this graphic's color (M3Interactive.colorStiffness).</summary>
+        public bool animate;
     }
 
     /// <summary>

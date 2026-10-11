@@ -21,6 +21,11 @@ Shader "M3E4Unity/UI/Shape"
         _ShapeTex ("Shape SDF Atlas", 2D) = "gray" {}
         _ShapeGrid ("Shape grid (tiles per row, tile px, texture px, sdf range)", Vector) = (32, 64, 2048, 0.125)
         _Color ("Tint", Color) = (1,1,1,1)
+        // Per-material runtime parameters (M3Progress, M3Interactive ripples), used when _M3DynOn = 1:
+        // progress kinds: _M3Dyn = (progress, amplitude 0..1); ripple: _M3Dyn / _M3Dyn2 = (center x, center y, radius progress, alpha)
+        _M3DynOn ("Dynamic parameters on", Float) = 0
+        _M3Dyn ("Dynamic parameters A", Vector) = (0,0,0,0)
+        _M3Dyn2 ("Dynamic parameters B", Vector) = (0,0,0,0)
 
         _StencilComp ("Stencil Comparison", Float) = 8
         _Stencil ("Stencil ID", Float) = 0
@@ -101,6 +106,9 @@ Shader "M3E4Unity/UI/Shape"
             float _UIMaskSoftnessX;
             float _UIMaskSoftnessY;
             int _UIVertexColorAlwaysGammaSpace;
+            float _M3DynOn;
+            float4 _M3Dyn;
+            float4 _M3Dyn2;
 
             v2f vert(appdata_t v)
             {
@@ -169,15 +177,44 @@ Shader "M3E4Unity/UI/Shape"
                 else if (kind < 2.5)       // 2: CSS-style blurred shadow of a rounded rectangle
                 {
                     float spread = p1.w;
+                    float sigma = p1.z;
+                    float opacity = 1.0;
+                    if (_M3DynOn > 0.5)
+                    {
+                        // elevation tween: (sigma, spread, y offset, opacity) of this layer (p3.x: 0 key, 1 ambient)
+                        float4 sp = p3.x < 0.5 ? _M3Dyn : _M3Dyn2;
+                        float margin = p2.x;
+                        rectMin = float2(margin, margin - sp.z);
+                        p = posInQuad - rectMin - rectSize * 0.5;
+                        sigma = sp.x;
+                        spread = sp.y;
+                        opacity = sp.w;
+                    }
                     float4 r = radii + (radii > 0 ? spread : 0);
                     float d = M3SdRoundBox(p, rectSize * 0.5 + spread, r);
-                    coverage = M3ShadowCoverage(d, p1.z);
+                    coverage = M3ShadowCoverage(d, sigma) * opacity;
                 }
                 else if (kind < 3.5)       // 3: MaterialShape / baked SDF tile, rotated
                 {
                     // p3 = (tile, rotation degrees (clockwise), scale, unused)
-                    float2 q = M3Rotate(IN.local - 0.5, p3.y) / max(p3.z, 1e-4) + 0.5;
-                    float d = M3SampleShape(_ShapeTex, _ShapeGrid, p3.x, q) * min(rectSize.x, rectSize.y) / max(p3.z, 1e-4);
+                    // p4 = (first tile, tile count, rotation per progress, unused): with _M3Dyn the
+                    // progress (x) picks and blends the tiles and sets the rotation (determinate LoadingIndicator)
+                    float tile = p3.x;
+                    float tileNext = p3.x;
+                    float blend = 0.0;
+                    float rot = p3.y;
+                    if (_M3DynOn > 0.5 && p4.y > 1.5)
+                    {
+                        float f = saturate(_M3Dyn.x) * (p4.y - 1.0);
+                        tile = p4.x + floor(f);
+                        tileNext = min(tile + 1.0, p4.x + p4.y - 1.0);
+                        blend = f - floor(f);
+                        rot = p4.z * saturate(_M3Dyn.x);
+                    }
+                    float2 q = M3Rotate(IN.local - 0.5, rot) / max(p3.z, 1e-4) + 0.5;
+                    float sd = M3SampleShape(_ShapeTex, _ShapeGrid, tile, q);
+                    if (blend > 0.0) sd = lerp(sd, M3SampleShape(_ShapeTex, _ShapeGrid, tileNext, q), blend);
+                    float d = sd * min(rectSize.x, rectSize.y) / max(p3.z, 1e-4);
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 4.5)       // 4: indeterminate LoadingIndicator, driven by time
@@ -200,8 +237,18 @@ Shader "M3E4Unity/UI/Shape"
                     float dBox = M3SdRoundBox(p, rectSize * 0.5, radii);
                     float rStart = 0.3 * max(rectSize.x, rectSize.y);
                     float rEnd = length(rectSize) * 0.5 + p3.w;
-                    float dCircle = length(p - p3.xy) - lerp(rStart, rEnd, p3.z);
-                    coverage = M3Coverage(max(dBox, dCircle));
+                    if (_M3DynOn > 0.5)
+                    {
+                        // up to two ripples (each drawn with its own alpha, like overlapping RippleAnimations)
+                        float c1 = M3Coverage(max(dBox, length(p - _M3Dyn.xy) - lerp(rStart, rEnd, _M3Dyn.z))) * saturate(_M3Dyn.w);
+                        float c2 = M3Coverage(max(dBox, length(p - _M3Dyn2.xy) - lerp(rStart, rEnd, _M3Dyn2.z))) * saturate(_M3Dyn2.w);
+                        coverage = 1.0 - (1.0 - c1) * (1.0 - c2);
+                    }
+                    else
+                    {
+                        float dCircle = length(p - p3.xy) - lerp(rStart, rEnd, p3.z);
+                        coverage = M3Coverage(max(dBox, dCircle));
+                    }
                 }
                 else if (kind < 6.5)       // 6: wavy / flat linear progress segment
                 {
@@ -220,6 +267,8 @@ Shader "M3E4Unity/UI/Shape"
                 else if (kind < 8.5)       // 8: checkbox check mark / dash, stroked path with progress
                 {
                     // p3 = (check fraction 0..1, crossfade to dash 0..1, stroke width dp, unused)
+                    // while animating: _M3Dyn = (check fraction, center gravitation)
+                    if (_M3DynOn > 0.5) p3.xy = _M3Dyn.xy;
                     float d = M3CheckMark(p, rectSize, p3);
                     coverage = M3Coverage(d);
                 }
@@ -232,11 +281,14 @@ Shader "M3E4Unity/UI/Shape"
 
                 else if (kind < 10.5)      // 10: linear progress indicator part (flat / wavy, determinate / indeterminate)
                 {
+                    // runtime progress / amplitude fraction of the maximum amplitude p5.y
+                    if (_M3DynOn > 0.5) { p3.x = _M3Dyn.x; p4.x = p5.y * _M3Dyn.y; }
                     float d = M3LinearProgress(posInQuad - rectMin, rectSize, p3, p4, p5, M3Now());
                     coverage = M3Coverage(d);
                 }
                 else if (kind < 11.5)      // 11: circular progress indicator part
                 {
+                    if (_M3DynOn > 0.5) { p3.x = _M3Dyn.x; p5.x = _M3Dyn.y; }
                     float d = M3CircularProgress(p, rectSize, p3, p4, p5, M3Now(), _ShapeTex, _ShapeGrid);
                     coverage = M3Coverage(d);
                 }

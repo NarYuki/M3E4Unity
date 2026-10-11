@@ -16,8 +16,6 @@ namespace M3E4Unity.Editor
     /// </summary>
     public static class M3ProgressIndicators
     {
-        const int ProgressFrames = 101;
-
         static RectTransform Root(Transform parent, string name, float w, float h)
         {
             var root = M3Build.Rect(name, parent);
@@ -28,19 +26,20 @@ namespace M3E4Unity.Editor
             return root;
         }
 
-        static M3Progress Animate(RectTransform root, Image[] parts, Func<int, float, ShapeCell> cell, float initial)
+        /// <summary>
+        /// Gives the parts their own dynamic material and adds the M3Progress that drives it
+        /// (_M3Dyn = progress, amplitude fraction). The atlas cells keep the initial state for
+        /// renderers without the material.
+        /// </summary>
+        static M3Progress Animate(RectTransform root, Image[] parts, float initial, bool wavy)
         {
-            var frames = new Sprite[parts.Length * ProgressFrames];
-            for (int p = 0; p < parts.Length; p++)
-            for (int i = 0; i < ProgressFrames; i++)
-                frames[p * ProgressFrames + i] = M3ShapeAtlas.Get(cell(p, i / (float)(ProgressFrames - 1)));
+            var mat = M3ShapeAtlas.CreateDynamicMaterial(root.name, new Vector4(initial, wavy ? IndicatorAmplitude(initial) : 0f, 0f, 0f));
+            foreach (var part in parts) part.material = mat;
             var prog = M3UdonBridge.Add<M3Progress>(root.gameObject);
             prog.parts = parts;
-            prog.frames = frames;
-            prog.frameCount = ProgressFrames;
+            prog.dynamicMaterial = mat;
+            prog.wavy = wavy;
             prog.target = initial;
-            int f = Mathf.RoundToInt(initial * (ProgressFrames - 1));
-            for (int p = 0; p < parts.Length; p++) parts[p].sprite = frames[p * ProgressFrames + f];
             M3UdonBridge.Sync(prog);
             return prog;
         }
@@ -65,14 +64,16 @@ namespace M3E4Unity.Editor
             {
                 float amp = wavy ? maxAmp * (progress.HasValue ? IndicatorAmplitude(p) : 1f) : 0f;
                 return ShapeCell.Create(ShapeKind.LinearProgress)
-                    // waves travel toward the end: one wavelength per second (waveSpeed = wavelength)
-                    .WithExtra(p, gap, stroke, part, amp, wavelength, -wavelength, progress.HasValue ? 0 : 1)
-                    .WithExtra2(progress.HasValue ? stop : 0);
+                    // waveSpeed = wavelength: the drawn segment is taken from the full wave path at
+                    // +offset and moved back by -offset, so the crests travel toward the start
+                    // p5 = (stop size, maximum amplitude for the runtime amplitude fraction)
+                    .WithExtra(p, gap, stroke, part, amp, wavelength, wavelength, progress.HasValue ? 0 : 1)
+                    .WithExtra2(progress.HasValue ? stop : 0, wavy ? maxAmp : 0f);
             }
 
             var track = M3Build.Shape("Track", root, Cell(1, progress ?? 0), ColorRef.Role(ProgressIndicatorTokens.TrackColor));
             var active = M3Build.Shape("Active", root, Cell(0, progress ?? 0), ColorRef.Role(ProgressIndicatorTokens.ActiveIndicatorColor));
-            if (progress.HasValue) Animate(root, new[] { active, track }, (part, p) => Cell(part == 0 ? 0 : 1, p), progress.Value);
+            if (progress.HasValue) Animate(root, new[] { active, track }, progress.Value, wavy);
             return root;
         }
 
@@ -105,7 +106,7 @@ namespace M3E4Unity.Editor
 
             var track = M3Build.Shape("Track", root, Cell(1, progress ?? 0), ColorRef.Role(ProgressIndicatorTokens.TrackColor));
             var active = M3Build.Shape("Active", root, Cell(0, progress ?? 0), ColorRef.Role(ProgressIndicatorTokens.ActiveIndicatorColor));
-            if (progress.HasValue) Animate(root, new[] { active, track }, (part, p) => Cell(part, p), progress.Value);
+            if (progress.HasValue) Animate(root, new[] { active, track }, progress.Value, wavy);
             return root;
         }
 
@@ -135,6 +136,7 @@ namespace M3E4Unity.Editor
         };
 
         const int MorphFrames = 24;
+        const int DeterminateSteps = 50;
         const float MorphMin = 0f, MorphMax = 1.1f;
 
         /// <summary>calculateScaleFactor(polygons) * ActiveIndicatorScale (LoadingIndicator.kt).</summary>
@@ -218,15 +220,20 @@ namespace M3E4Unity.Editor
             var polys = new List<RoundedPolygon> { rotated, MaterialShapes.Get(MaterialShape.SoftBurst) };
             float scale = ScaleFactor(polys);
             var morph = new Morph(polys[0].Normalized(), polys[1].Normalized());
-            var image = M3Build.Shape("Indicator", root, ShapeCell.Create(ShapeKind.SdfTile), ColorRef.Role(color));
-            Animate(root, new[] { image }, (part, p) =>
+            // tiles every 2 %, blended by the shader; rotate(-progress * 180) (counter-clockwise)
+            int firstTile = -1;
+            for (int i = 0; i <= DeterminateSteps; i++)
             {
-                // tiles every 2 %: the rotation (exact per frame) carries most of the motion
-                float pq = Mathf.Round(p * 50f) / 50f;
-                int tile = M3ShapeTiles.GetFilled($"loadingdet:{Mathf.RoundToInt(pq * 50)}", Fit(morph.AsCubics(pq), scale));
-                // rotate(-progress * 180): counter-clockwise
-                return ShapeCell.Create(ShapeKind.SdfTile).WithExtra(tile, -p * 180f, 1f);
-            }, progress.Value);
+                float pq = i / (float)DeterminateSteps;
+                int tile = M3ShapeTiles.GetFilled($"loadingdet:{i}", Fit(morph.AsCubics(pq), scale));
+                if (firstTile < 0) firstTile = tile;
+            }
+            float p0 = progress.Value;
+            // p3 = the initial state; p4 = (first tile, tile count, rotation per progress) for _M3Dyn
+            var detCell = ShapeCell.Create(ShapeKind.SdfTile)
+                .WithExtra(firstTile + Mathf.RoundToInt(p0 * DeterminateSteps), -p0 * 180f, 1f, 0f, firstTile, DeterminateSteps + 1, -180f, 0f);
+            var image = M3Build.Shape("Indicator", root, detCell, ColorRef.Role(color));
+            Animate(root, new[] { image }, p0, false);
             return root;
         }
     }

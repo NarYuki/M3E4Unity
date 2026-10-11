@@ -108,8 +108,10 @@ namespace M3E4Unity.Udon
         {
             if (track == null) return;
             float f = Mathf.Clamp01(GetFraction());
-            // SliderDefaults.Thumb: half width while interacting
-            float tw = pressed ? thumbWidth / 2f : thumbWidth;
+            // SliderDefaults.Thumb draws a half-width handle while interacting, but its Box keeps
+            // .size(thumbSize): the layout and the track gaps use the full thumb width
+            float tw = thumbWidth;
+            float handleW = pressed ? thumbWidth / 2f : thumbWidth;
             float total = ((RectTransform)transform).rect.width;
             float W = total - tw;
             track.anchorMin = new Vector2(0f, 0.5f);
@@ -155,7 +157,7 @@ namespace M3E4Unity.Udon
                 thumb.anchorMax = new Vector2(0f, 0.5f);
                 thumb.pivot = new Vector2(0.5f, 0.5f);
                 thumb.anchoredPosition = new Vector2(tw / 2f + valueEnd, 0f);
-                thumb.sizeDelta = new Vector2(tw, thumb.sizeDelta.y);
+                thumb.sizeDelta = new Vector2(handleW, thumb.sizeDelta.y);
             }
 
             PlaceTicks(valueEnd, endGap, W, c);

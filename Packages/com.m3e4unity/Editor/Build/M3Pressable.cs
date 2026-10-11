@@ -51,6 +51,11 @@ namespace M3E4Unity.Editor
 
         /// <summary>Checked overlay of the content color (SplitButton trailing: PressedStateLayerOpacity).</summary>
         public float CheckedOverlay;
+
+        /// <summary>Stiffness of the color fade (animateColor with an effects spec); 0 = no fades.</summary>
+        public float ColorStiffness;
+        /// <summary>Which state colors fade: all of them (ListItem), the container (menu items), the outline (toggle buttons).</summary>
+        public bool AnimateAllColors, AnimateContainer, AnimateOutline;
     }
 
     /// <summary>
@@ -89,6 +94,8 @@ namespace M3E4Unity.Editor
                 Spring = style.Spring,
                 HoveredShape = style.HoveredShape,
             };
+            Spec.ColorStiffness = style.ColorStiffness;
+            Spec.AnimateAllColors = style.AnimateAllColors;
             float rest = style.Selected ? Spec.SelectedShape : style.RestShape;
             var shapeFor = style.ShapeFor ?? (r => new CornerShape(r));
 
@@ -97,6 +104,7 @@ namespace M3E4Unity.Editor
             {
                 var container = M3Build.Shape("Container", root, ShapeCell.Create(ShapeKind.Fill).WithShape(shapeFor(rest)), ColorRef.Role(containerRole));
                 Ignore(container);
+                if (style.AnimateContainer) Spec.AnimatedColors.Add(container);
                 Spec.ShapeLayers.Add((container, r => ShapeCell.Create(ShapeKind.Fill).WithShape(shapeFor(r))));
                 var disabled = ColorRef.Over(bg, style.DisabledContainer, style.DisabledContainerOpacity);
                 Spec.Color(container,
@@ -111,6 +119,7 @@ namespace M3E4Unity.Editor
                 float w = style.OutlineWidth;
                 var outline = M3Build.Shape("Outline", root, ShapeCell.Create(ShapeKind.Stroke).WithShape(shapeFor(rest)).WithStroke(w), ColorRef.Role(style.Outline.Value));
                 Ignore(outline);
+                if (style.AnimateOutline) Spec.AnimatedColors.Add(outline);
                 Spec.ShapeLayers.Add((outline, r => ShapeCell.Create(ShapeKind.Stroke).WithShape(shapeFor(r)).WithStroke(w)));
                 var on = ColorRef.Over(bg, style.Outline.Value, 1f);
                 var off = ColorRef.Over(bg, style.Outline.Value, style.DisabledOutlineOpacity);

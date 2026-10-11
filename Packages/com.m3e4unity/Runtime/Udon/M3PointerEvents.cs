@@ -19,7 +19,19 @@ namespace M3E4Unity.Udon
         public UnityEvent onPointerEnter = new UnityEvent();
         public UnityEvent onPointerExit = new UnityEvent();
 
-        public void OnPointerDown(PointerEventData eventData) => onPointerDown.Invoke();
+        /// <summary>Screen position and camera of the latest press, read by the ripple (touch point origin).</summary>
+        public static Vector2 LastPressPosition;
+        public static Camera LastPressCamera;
+        public static int LastPressFrame = -1;
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            LastPressPosition = eventData.position;
+            LastPressCamera = eventData.pressEventCamera;
+            LastPressFrame = Time.frameCount;
+            onPointerDown.Invoke();
+        }
+
         public void OnPointerUp(PointerEventData eventData) => onPointerUp.Invoke();
         public void OnPointerEnter(PointerEventData eventData) => onPointerEnter.Invoke();
         public void OnPointerExit(PointerEventData eventData) => onPointerExit.Invoke();

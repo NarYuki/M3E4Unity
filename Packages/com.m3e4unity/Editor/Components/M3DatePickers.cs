@@ -115,10 +115,52 @@ namespace M3E4Unity.Editor
             var rings = new List<Graphic>();
             var interactives = new List<M3Interactive>();
             var circle = ShapeCell.Create(ShapeKind.Fill).WithShape(CornerShape.Full);
+            // HorizontalMonthsList: the month grid scrolls horizontally inside the picker width
+            var monthViewport = M3Build.Rect("MonthViewport", root);
+            Place(monthViewport, 0f, gridTop, Width, Rows * Cell);
+            monthViewport.gameObject.AddComponent<RectMask2D>();
+            var monthRt = M3Build.Rect("Month", monthViewport);
+            Place(monthRt, 0f, 0f, Width, Rows * Cell);
+            var ghostRt = M3Build.Rect("MonthGhost", monthViewport);
+            Place(ghostRt, Width, 0f, Width, Rows * Cell);
+            var ghostCells = new List<GameObject>();
+            var ghostTexts = new List<TextMeshProUGUI>();
+            var ghostCircles = new List<Graphic>();
+            var ghostRings = new List<Graphic>();
             for (int i = 0; i < Rows * Days; i++)
             {
-                var cell = M3Build.Rect("DayCell", root);
-                Place(cell, gridX + (i % Days) * Cell, gridTop + (i / Days) * Cell, Cell, Cell);
+                // the outgoing month while the list scrolls: visuals only
+                var gcell = M3Build.Rect("DayCell", ghostRt);
+                Place(gcell, gridX + (i % Days) * Cell, (i / Days) * Cell, Cell, Cell);
+                var gday = M3Build.Rect("Day", gcell);
+                gday.anchorMin = gday.anchorMax = new Vector2(0.5f, 0.5f);
+                gday.sizeDelta = new Vector2(dayW, dayH);
+                var gsel = M3Build.Shape("Selected", gday, circle, ColorRef.Role(DatePickerModalTokens.DateSelectedContainerColor));
+                var gring = M3Build.Shape("Today", gday, ShapeCell.Create(ShapeKind.Stroke).WithShape(CornerShape.Full).WithStroke(DatePickerModalTokens.DateTodayContainerOutlineWidth),
+                    ColorRef.Role(DatePickerModalTokens.DateTodayContainerOutlineColor));
+                var gtext = M3Build.Text("Label", gday, (i + 1).ToString(), DatePickerModalTokens.DateLabelTextFont, ColorRef.Role(DatePickerModalTokens.DateUnselectedLabelTextColor), inner);
+                M3Build.Fill(gtext.rectTransform);
+                gtext.alignment = TextAlignmentOptions.Center;
+                foreach (var g in new Graphic[] { gtext, gsel, gring })
+                {
+                    g.raycastTarget = false;
+                    var b = g.GetComponent<M3ColorBinding>();
+                    if (b != null) Object.DestroyImmediate(b);
+                }
+                ghostCells.Add(gcell.gameObject); ghostTexts.Add(gtext); ghostCircles.Add(gsel); ghostRings.Add(gring);
+            }
+            ghostRt.gameObject.SetActive(false);
+            picker.month = monthRt;
+            picker.monthGhost = ghostRt;
+            picker.ghostCells = ghostCells.ToArray();
+            picker.ghostTexts = ghostTexts.ToArray();
+            picker.ghostCircles = ghostCircles.ToArray();
+            picker.ghostRings = ghostRings.ToArray();
+            picker.monthWidth = Width;
+            for (int i = 0; i < Rows * Days; i++)
+            {
+                var cell = M3Build.Rect("DayCell", monthRt);
+                Place(cell, gridX + (i % Days) * Cell, (i / Days) * Cell, Cell, Cell);
                 var day = M3Build.Rect("Day", cell);
                 day.anchorMin = day.anchorMax = new Vector2(0.5f, 0.5f);
                 day.sizeDelta = new Vector2(dayW, dayH);

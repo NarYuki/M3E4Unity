@@ -142,12 +142,15 @@ namespace M3E4Unity.Editor
             }
             else if (kind == ChipKind.Filter && checkmarkWhenSelected)
             {
-                // the usual FilterChip sample: leadingIcon = if (selected) Icons.Filled.Done else null
-                var spacer = Spacer(root, "LeadingSpacer");
+                // the usual FilterChip sample: leadingIcon = if (selected) Icons.Filled.Done else null.
+                // AnimatingChipContent (SelectableChip): expandHorizontally(FastSpatial, expandFrom = Start)
+                // + fadeIn(DefaultEffects); shrinkHorizontally(FastSpatial) + fadeOut(DefaultEffects).
+                // Hidden, the slot is the Spacer(width = 0).
                 var icon = M3Build.Icon("Checkmark", root, "check", iconSize, ColorRef.Role(leadingSelected), ctx);
                 p.Content(icon, leadingSelected, leadingSelected);
-                p.Spec.ShowWhenSelected.Add(icon.gameObject);
-                p.Spec.HideWhenSelected.Add(spacer.gameObject);
+                var fastSpatial = MotionScheme.Get(ctx.Motion, MotionRole.FastSpatial);
+                float effects = MotionScheme.Get(ctx.Motion, MotionRole.DefaultEffects).Stiffness;
+                p.Spec.ExpandReveal(icon, iconSize, true, fastSpatial, fastSpatial, effects, effects);
             }
             else Spacer(root, "LeadingSpacer");
 

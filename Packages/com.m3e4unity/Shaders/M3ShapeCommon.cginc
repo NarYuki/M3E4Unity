@@ -438,13 +438,27 @@ float M3CircularProgress(float2 p, float2 size, float4 p3, float4 p4, float4 p5,
         start = 90.0 + rotation;
         sweep = prog * 360.0;
     }
-    // gapSizeSweep = (gap + stroke) / (PI * diameter) * 360
-    float gapSweep = (p3.y + w) / (3.14159265 * S) * 360.0;
+    // Space between the indicator and the track, in degrees on each side.
+    float spaceSweep;
+    if (p4.y > 0.5)
+    {
+        // CircularWavyProgressModifiers.updateDrawPaths: path length L = PI * (S - stroke),
+        // trackSpacing = 2 * min(pStop, cap) + min(pStop, gap)
+        float L = 3.14159265 * (S - w);
+        float pStop = sweep / 360.0 * L;
+        spaceSweep = (2.0 * min(pStop, hw) + min(pStop, p3.y)) / L * 360.0;
+    }
+    else
+    {
+        // ProgressIndicator.kt: gapSizeSweep = (gap + stroke) / (PI * diameter) * 360, coerced to the sweep
+        spaceSweep = min(sweep, (p3.y + w) / (3.14159265 * S) * 360.0);
+    }
     if (part < 0.5)
     {
         if (p4.y > 0.5 && p5.x > 0.001)
         {
             // wavy: path tile distance, clipped to the active angle range with round caps
+            if (sweep <= 0.0) return 1e4;
             float frame = p4.x + saturate(p5.x) * (p4.y - 1.0);
             // The star path starts at a vertex at 3 o'clock; Compose draws it rotated to start at
             // 12 o'clock (toPath startAngle = 270), the indeterminate drawing is rotated by
@@ -462,10 +476,12 @@ float M3CircularProgress(float2 p, float2 size, float4 p3, float4 p4, float4 p5,
             float along = radians(outside) * r;
             return length(float2(along, abs(dPath))) - hw;
         }
-        return M3ArcDistance(p, r, start, max(sweep, 0.1), hw);
+        // a zero sweep draws nothing (empty path segment / zero-sweep arc)
+        if (sweep <= 0.0) return 1e4;
+        return M3ArcDistance(p, r, start, sweep, hw);
     }
-    float tStart = start + sweep + min(sweep, gapSweep);
-    float tSweep = 360.0 - sweep - min(sweep, gapSweep) * 2.0;
+    float tStart = start + sweep + spaceSweep;
+    float tSweep = 360.0 - sweep - spaceSweep * 2.0;
     if (tSweep <= 0.0) return 1e4;
     return M3ArcDistance(p, r, tStart, tSweep, hw);
 }

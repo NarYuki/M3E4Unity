@@ -81,6 +81,13 @@ namespace M3E4Unity.Udon
         [Tooltip("6 palette indices per graphic: unselected, selected, -, disabled unselected, disabled selected, -.")]
         public int[] colorIndices;
         public int[] coloredItem;
+        [Tooltip("Graphics whose color fades with the selection (AnimatedNavigationItem labels: DefaultEffects).")]
+        public Graphic[] fadeGraphics;
+        public float colorStiffness = 1600f;
+        Color[] colorFrom;
+        float colorT = 1f;
+        float colorV;
+        bool fadeNext;
 
         float expandP;
         float expandV;
@@ -124,7 +131,9 @@ namespace M3E4Unity.Udon
             if (items[index] != null && !items[index].interactable) return;
             if (index == selectedIndex) return;
             selectedIndex = index;
+            fadeNext = true;
             ApplySelection();
+            fadeNext = false;
             if (changeListener != null) changeListener.SendCustomEvent("_M3NavChanged");
             Kick();
         }
@@ -210,6 +219,7 @@ namespace M3E4Unity.Udon
                 if (Step(selP[i], selV[i], i == selectedIndex ? 1f : 0f, dt)) busy = true;
                 selP[i] = stepX; selV[i] = stepV;
             }
+            if (colorT < 1f && StepColors(dt)) busy = true;
             Layout();
             if (busy) SendCustomEventDelayedFrames("_Tick", 1);
             else ticking = false;
@@ -232,13 +242,62 @@ namespace M3E4Unity.Udon
             ApplyColors();
         }
 
+        bool Fades(Graphic g)
+        {
+            if (fadeGraphics == null) return false;
+            for (int k = 0; k < fadeGraphics.Length; k++) if (fadeGraphics[k] == g) return true;
+            return false;
+        }
+
+        int ColorIndex(int i)
+        {
+            int item = coloredItem[i];
+            bool enabled = items == null || item >= items.Length || items[item] == null || items[item].interactable;
+            int slot = (item == selectedIndex ? 1 : 0) + (enabled ? 0 : 3);
+            return colorIndices[i * 6 + slot];
+        }
+
+        bool StepColors(float dt)
+        {
+            if (theme == null || colorFrom == null) { colorT = 1f; return false; }
+            // DefaultEffects: critically damped
+            float w = Mathf.Sqrt(colorStiffness);
+            float x0 = colorT - 1f;
+            float cb = colorV + w * x0;
+            float e = Mathf.Exp(-w * dt);
+            float x = (x0 + cb * dt) * e;
+            colorV = (cb - w * (x0 + cb * dt)) * e;
+            colorT = 1f + x;
+            bool busy = Mathf.Abs(x) > 0.002f || Mathf.Abs(colorV) > 0.01f;
+            if (!busy) { colorT = 1f; colorV = 0f; }
+            for (int i = 0; i < colored.Length; i++)
+            {
+                Graphic g = colored[i];
+                if (g == null || !Fades(g)) continue;
+                int idx = ColorIndex(i);
+                if (idx < 0) continue;
+                g.color = theme.MixOklab(colorFrom[i], theme.Get(idx), colorT);
+            }
+            return busy;
+        }
+
         void ApplyColors()
         {
             if (theme == null || colored == null || colorIndices == null || coloredItem == null) return;
+            if (fadeNext && fadeGraphics != null && fadeGraphics.Length > 0)
+            {
+                // animateColorAsState: from the colors shown now
+                if (colorFrom == null || colorFrom.Length != colored.Length) colorFrom = new Color[colored.Length];
+                for (int i = 0; i < colored.Length; i++) if (colored[i] != null) colorFrom[i] = colored[i].color;
+                colorT = 0f;
+                colorV = 0f;
+            }
+            else colorT = 1f;
             for (int i = 0; i < colored.Length; i++)
             {
                 Graphic g = colored[i];
                 if (g == null) continue;
+                if (colorT < 1f && Fades(g)) continue;
                 int item = coloredItem[i];
                 bool enabled = items == null || item >= items.Length || items[item] == null || items[item].interactable;
                 int slot = (item == selectedIndex ? 1 : 0) + (enabled ? 0 : 3);

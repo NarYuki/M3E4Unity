@@ -9,8 +9,8 @@ namespace M3E4Unity.Udon
     /// <summary>
     /// Range slider (Slider.kt RangeSlider, drawTrack with isRangeSlider): inactive track before the
     /// start thumb with a stop indicator, active track between the thumbs, inactive track after the end
-    /// thumb with a stop indicator, gaps of thumbWidth / 2 + 6 dp around each thumb (a pressed thumb
-    /// halves its width). Input: two uGUI Sliders split at the middle between the thumbs, each mapping
+    /// thumb with a stop indicator, gaps of thumbWidth / 2 + 6 dp around each thumb (a pressed thumb draws
+    /// a half-width handle; the gaps keep the full width). Input: two uGUI Sliders split at the middle between the thumbs, each mapping
     /// its half of the track linearly, so a press always picks the closer thumb; the split is updated
     /// when the pointer is released.
     /// </summary>
@@ -153,8 +153,9 @@ namespace M3E4Unity.Udon
             float endW = endPressed ? thumbWidth / 2f : thumbWidth;
             float vs = W * Fraction(startValue);
             float ve = W * Fraction(endValue);
-            float startGap = startW / 2f + gap;
-            float endGap = endW / 2f + gap;
+            // the thumbs' Boxes keep their full size (only the drawn handle halves): the gaps use thumbWidth
+            float startGap = thumbWidth / 2f + gap;
+            float endGap = thumbWidth / 2f + gap;
             float c = cornerSize;
             // inactive track before the start thumb (drawn past startGap + corner) with its stop indicator
             bool startVisible = vs > startGap + c;
