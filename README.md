@@ -68,7 +68,7 @@ Requirements: Unity 2022.3 with uGUI and TextMesh Pro 3.0.6. For VRChat worlds, 
    - **VRChat Creator Companion / ALCOM**: open https://naryuki.github.io/M3E4Unity/ and press *Add to VCC*, or add `https://naryuki.github.io/M3E4Unity/index.json` in *Settings > Packages > Add Repository*. Then add *M3E4Unity* to your project from *Manage Project*; new versions show up there.
    - **Unity Package Manager (git URL)**: *Window > Package Manager > + > Add package from git URL…* and enter the URL with the version tag:
      ```
-     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.1.0
+     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.2.0
      ```
      To update, change the tag (`#v0.2.0`, …).
    - **From a release**: download `com.m3e4unity-X.Y.Z.unitypackage` (imports into `Packages/com.m3e4unity`) or `com.m3e4unity-X.Y.Z.zip` (*Add package from tarball/disk…*) from [Releases](https://github.com/NarYuki/M3E4Unity/releases).
@@ -202,7 +202,7 @@ M3E4Unity は **Material 3 Expressive を Unity uGUI に移植したライブラ
    - **VRChat Creator Companion / ALCOM**：https://naryuki.github.io/M3E4Unity/ を開き、*Add to VCC* を押します。または *Settings > Packages > Add Repository* に `https://naryuki.github.io/M3E4Unity/index.json` を追加します。そのあと *Manage Project* から M3E4Unity を追加します。新しい版もそこに表示されます。
    - **Unity Package Manager（git URL）**：*Add package from git URL…* に、版のタグ付きの URL を入力します。
      ```
-     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.1.0
+     https://github.com/NarYuki/M3E4Unity.git?path=/Packages/com.m3e4unity#v0.2.0
      ```
      更新するときは、タグ（`#v0.2.0` など）を書き換えます。
    - **リリースから入れる**：[Releases](https://github.com/NarYuki/M3E4Unity/releases) から `com.m3e4unity-X.Y.Z.unitypackage`（`Packages/com.m3e4unity` に取り込まれます）か、`com.m3e4unity-X.Y.Z.zip` をダウンロードします。

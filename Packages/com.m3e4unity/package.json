@@ -1,7 +1,7 @@
 {
   "name": "com.m3e4unity",
   "displayName": "M3E4Unity - Material 3 Expressive for Unity",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "unity": "2022.3",
   "description": "Material 3 Expressive for Unity uGUI: dynamic color (material-color-utilities port), the full Compose Material 3 token set, MaterialShapes and shape morphing, spring motion, and builders for every M3 Expressive component. Works in plain Unity and in VRChat worlds (UdonSharp).",
   "keywords": [
