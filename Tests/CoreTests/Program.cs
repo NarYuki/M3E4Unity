@@ -159,8 +159,39 @@ static class Program
         return 0;
     }
 
+    // The LoadingIndicator's indeterminate morph sequence (circular), as vector paths: one row per morph.
+    static int MorphSvg(string path)
+    {
+        var seq = new[] { M3E4Unity.Shapes.MaterialShape.SoftBurst, M3E4Unity.Shapes.MaterialShape.Cookie9Sided, M3E4Unity.Shapes.MaterialShape.Pentagon,
+            M3E4Unity.Shapes.MaterialShape.Pill, M3E4Unity.Shapes.MaterialShape.Sunny, M3E4Unity.Shapes.MaterialShape.Cookie4Sided, M3E4Unity.Shapes.MaterialShape.Oval };
+        int cols = 12, cell = 100;
+        var sb = new StringBuilder();
+        sb.Append($"<svg xmlns='http://www.w3.org/2000/svg' width='{cols * cell}' height='{seq.Length * cell}' style='background:#fff'>");
+        for (int m = 0; m < seq.Length; m++)
+        {
+            var morph = new M3E4Unity.Shapes.Morph(M3E4Unity.Shapes.MaterialShapes.Get(seq[m]).Normalized(), M3E4Unity.Shapes.MaterialShapes.Get(seq[(m + 1) % seq.Length]).Normalized());
+            for (int k = 0; k < cols; k++)
+            {
+                float t = k / (float)(cols - 2); // 0 .. 1.1
+                var p = new StringBuilder();
+                bool first = true;
+                foreach (var c in morph.AsCubics(t))
+                {
+                    float ox = k * cell + 5, oy = m * cell + 5, sc = 90;
+                    if (first) { p.Append(FormattableString.Invariant($"M{ox + c.Anchor0X * sc},{oy + c.Anchor0Y * sc} ")); first = false; }
+                    p.Append(FormattableString.Invariant($"C{ox + c.Control0X * sc},{oy + c.Control0Y * sc} {ox + c.Control1X * sc},{oy + c.Control1Y * sc} {ox + c.Anchor1X * sc},{oy + c.Anchor1Y * sc} "));
+                }
+                sb.Append($"<path d='{p.Append('Z')}' fill='#6750a4'/>");
+            }
+        }
+        sb.Append("</svg>");
+        File.WriteAllText(path, sb.ToString());
+        return 0;
+    }
+
     static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "morph-svg") return MorphSvg(args[1]);
         if (args.Length == 2 && args[0] == "shapes-svg") return ShapesSvg(args[1]);
         if (args.Length == 1 && args[0] == "carousel") return CarouselDump();
         var golden = args.Length > 0 ? File.ReadAllLines(args[0]) : null;

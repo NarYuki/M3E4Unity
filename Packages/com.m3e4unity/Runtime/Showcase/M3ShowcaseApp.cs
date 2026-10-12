@@ -60,6 +60,45 @@ namespace M3E4Unity.Showcase
             ShowPage(currentPage);
             ApplyScheme();
             Log("Ready — click, drag and type anywhere to try the components");
+            ReadCaptureArgs();
+        }
+
+        // ---- frame capture for checking animations in the built player -----------------------------
+        // "M3E4Unity Showcase.exe" -m3page 3 -m3capture <folder> [-m3count 120] [-m3step 0.05]
+
+        string captureDir;
+        int captureCount = 120, captureTaken;
+        float captureStep = 0.05f, captureNext;
+
+        void ReadCaptureArgs()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "-m3page" && int.TryParse(args[i + 1], out var p)) ShowPage(p);
+                else if (args[i] == "-m3capture") captureDir = args[i + 1];
+                else if (args[i] == "-m3count") int.TryParse(args[i + 1], out captureCount);
+                else if (args[i] == "-m3step") float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out captureStep);
+            }
+            if (captureDir == null) return;
+            System.IO.Directory.CreateDirectory(captureDir);
+            captureNext = Time.time + 1f;
+            StartCoroutine(Capture());
+        }
+
+        System.Collections.IEnumerator Capture()
+        {
+            while (captureTaken < captureCount)
+            {
+                yield return new WaitForEndOfFrame();
+                if (Time.time < captureNext) continue;
+                captureNext += captureStep;
+                var tex = ScreenCapture.CaptureScreenshotAsTexture();
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(captureDir, captureTaken.ToString("D3") + ".png"), tex.EncodeToPNG());
+                Destroy(tex);
+                captureTaken++;
+            }
+            Application.Quit();
         }
 
         // ---- pages ---------------------------------------------------------------------------------
