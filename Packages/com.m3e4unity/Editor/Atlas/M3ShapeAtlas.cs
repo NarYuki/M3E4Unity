@@ -42,28 +42,35 @@ namespace M3E4Unity.Editor
         public static Material CreateDynamicMaterial(string name, Vector4 initial)
         {
             Load();
-            Directory.CreateDirectory(DynamicFolder);
+            string folder = DynamicScope != null ? DynamicFolder + "/" + DynamicScope : DynamicFolder;
+            Directory.CreateDirectory(folder);
             var m = new Material(material) { name = name };
             m.SetFloat("_M3DynOn", 1f);
             m.SetVector("_M3Dyn", initial);
             m.SetVector("_M3Dyn2", Vector4.zero);
-            var path = AssetDatabase.GenerateUniqueAssetPath($"{DynamicFolder}/{name}.mat");
+            var path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/{name}.mat");
             AssetDatabase.CreateAsset(m, path);
             return m;
         }
 
         /// <summary>
-        /// Deletes the per-component dynamic materials (not the ripple pool). For tools that rebuild a
-        /// whole scene, so repeated builds do not pile up materials.
+        /// Subfolder of Dynamic for the materials created by a tool that rebuilds a whole scene
+        /// (null = Dynamic itself, the default for components created from the menus).
         /// </summary>
-        public static void ClearDynamicMaterials()
+        public static string DynamicScope;
+
+        /// <summary>
+        /// Starts a scene rebuild by a tool: later dynamic materials go to Dynamic/scope, and the ones
+        /// left there by the previous rebuild (only referenced by the scene being replaced) are deleted.
+        /// Other scopes and the menu-created materials are kept.
+        /// </summary>
+        public static void BeginDynamicScope(string scope)
         {
-            if (!AssetDatabase.IsValidFolder(DynamicFolder)) return;
-            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { DynamicFolder }))
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (!Path.GetFileName(path).StartsWith("RipplePool_")) AssetDatabase.DeleteAsset(path);
-            }
+            DynamicScope = scope;
+            string folder = DynamicFolder + "/" + scope;
+            if (!AssetDatabase.IsValidFolder(folder)) return;
+            foreach (var guid in AssetDatabase.FindAssets("t:Material", new[] { folder }))
+                AssetDatabase.DeleteAsset(AssetDatabase.GUIDToAssetPath(guid));
         }
 
         /// <summary>The shared pool of ripple materials (RipplePool_00 …), created on first use.</summary>

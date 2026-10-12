@@ -22,7 +22,7 @@ namespace M3E4Unity.Editor.Dev
             int code = 0;
             try
             {
-                M3ShapeAtlas.ClearDynamicMaterials();
+                M3ShapeAtlas.BeginDynamicScope("PullSheet");
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var theme = M3Canvas.DefaultTheme();
                 const float w = 96f, h = 140f;
@@ -45,6 +45,7 @@ namespace M3E4Unity.Editor.Dev
                     boxes[s * Fractions.Length + i] = box.GetComponent<M3PullToRefresh>();
                 }
                 M3Canvas.ApplyTheme(root.gameObject);
+                M3ShapeAtlas.DynamicScope = null;
                 M3ShapeAtlas.Save();
                 M3ShapeTiles.Save();
                 var t = typeof(M3PullToRefresh);

@@ -61,7 +61,7 @@ namespace M3E4Unity.Editor.Dev
         public static Page[] Build(string scenePath)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(scenePath));
-            M3ShapeAtlas.ClearDynamicMaterials();
+            M3ShapeAtlas.BeginDynamicScope("Catalog");
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var theme = M3Canvas.DefaultTheme();
             var pages = new List<Page>();
@@ -86,6 +86,7 @@ namespace M3E4Unity.Editor.Dev
                     pages.Add(new Page { Name = pageName, Root = root, Size = size });
                 }
             }
+            M3ShapeAtlas.DynamicScope = null;
             M3ShapeAtlas.Save();
             M3ShapeTiles.Save();
             EditorSceneManager.SaveScene(scene, scenePath);

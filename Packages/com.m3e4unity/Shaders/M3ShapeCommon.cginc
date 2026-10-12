@@ -83,13 +83,18 @@ float2 M3Rotate(float2 v, float deg)
 
 // Baked SDF tile lookup. grid = (tiles per row, tile px, texture px, unused).
 // q is in the unit square of the shape (y up). Returns the signed distance in shape units.
+// Exact quotient and remainder of non-negative integer-valued floats. HLSL fmod and a / b go
+// through a reciprocal, so fmod(7, 7) can return 7 and floor(21 / 21) can return 0.
+float M3IDiv(float a, float b) { return floor((a + 0.5) / b); }
+float M3IMod(float a, float b) { return a - b * M3IDiv(a, b); }
+
 float M3SampleShape(sampler2D tex, float4 grid, float tile, float2 q)
 {
     float tilesPerRow = grid.x, tilePx = grid.y, texPx = grid.z, range = grid.w;
     float2 outside = max(max(-q, q - 1.0), 0.0);
     float pad = 2.0;
-    float col = fmod(tile, tilesPerRow);
-    float row = floor(tile / tilesPerRow);
+    float row = M3IDiv(tile, tilesPerRow);
+    float col = tile - row * tilesPerRow;
     float2 qc = saturate(q);
     float2 uv = (float2(col, row) * tilePx + pad + qc * (tilePx - 2.0 * pad)) / texPx;
     // RG half-float tiles: R = signed distance in shape units (negative inside)
@@ -102,8 +107,8 @@ float M3SamplePathParam(sampler2D tex, float4 grid, float tile, float2 q)
 {
     float tilesPerRow = grid.x, tilePx = grid.y, texPx = grid.z;
     float pad = 2.0;
-    float col = fmod(tile, tilesPerRow);
-    float row = floor(tile / tilesPerRow);
+    float row = M3IDiv(tile, tilesPerRow);
+    float col = tile - row * tilesPerRow;
     float2 uv = (float2(col, row) * tilePx + pad + saturate(q) * (tilePx - 2.0 * pad)) / texPx;
     // G = arc-length parameter (0..1) of the closest point on the path
     return tex2Dlod(tex, float4(uv, 0, 0)).g;
@@ -136,9 +141,9 @@ void M3LoadingIndicatorFrame(float time, float4 p3, float4 p4, out float angle, 
     float k = floor(time / interval);
     float tt = time - k * interval;
     float morphCount = p3.y;
-    float morph = fmod(k, morphCount);
+    float morph = M3IMod(k, morphCount);
     float progress;
-    float target = 90.0 * (fmod(k, 4.0) + 1.0);
+    float target = 90.0 * (M3IMod(k, 4.0) + 1.0);
     if (tt < p3.w)
     {
         progress = M3SpringProgress(tt, p4.z, p4.w);
@@ -146,7 +151,7 @@ void M3LoadingIndicatorFrame(float time, float4 p3, float4 p4, out float angle, 
     else
     {
         progress = 0.0;
-        morph = fmod(morph + 1.0, morphCount);
+        morph = M3IMod(morph + 1.0, morphCount);
         target += 90.0;
     }
     float global = 360.0 * frac(time / 4.666);

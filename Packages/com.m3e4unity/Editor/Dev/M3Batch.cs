@@ -97,7 +97,7 @@ namespace M3E4Unity.Editor.Dev
                 float t0 = float.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_START"), out var a) ? a : 0f;
                 float dt = float.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_STEP"), out var b) ? b : 0.1f;
                 int rows = int.TryParse(Environment.GetEnvironmentVariable("M3_MOTION_ROWS"), out var c) ? c : 24;
-                M3ShapeAtlas.ClearDynamicMaterials();
+                M3ShapeAtlas.BeginDynamicScope("MotionSheet");
                 EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 var theme = M3Canvas.DefaultTheme();
                 const float cell = 64f;
@@ -132,6 +132,7 @@ namespace M3E4Unity.Editor.Dev
                     }
                 }
                 M3Canvas.ApplyTheme(root.gameObject);
+                M3ShapeAtlas.DynamicScope = null;
                 M3ShapeAtlas.Save();
                 M3ShapeTiles.Save();
 

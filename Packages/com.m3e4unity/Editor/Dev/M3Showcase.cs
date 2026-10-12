@@ -131,7 +131,7 @@ namespace M3E4Unity.Editor.Dev
 
         public static void BuildScene()
         {
-            M3ShapeAtlas.ClearDynamicMaterials();
+            M3ShapeAtlas.BeginDynamicScope("Showcase");
             Directory.CreateDirectory(Folder);
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var camGo = new GameObject("Camera");
@@ -379,6 +379,7 @@ namespace M3E4Unity.Editor.Dev
             holder.sizeDelta = sizes[0];
             ShowFirst(app);
             M3Canvas.ApplyTheme(root.gameObject);
+            M3ShapeAtlas.DynamicScope = null;
             M3ShapeAtlas.Save();
             M3ShapeTiles.Save();
             EditorSceneManager.SaveScene(scene, ScenePath);
